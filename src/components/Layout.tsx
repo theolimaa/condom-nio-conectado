@@ -3,7 +3,7 @@ import {
   Building2, LayoutDashboard, LogOut, User, ChevronRight, Menu, X
 } from 'lucide-react';
 import { useState } from 'react';
-import { useApp } from '@/lib/store';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 
 const navItems = [
@@ -12,15 +12,18 @@ const navItems = [
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { state, dispatch } = useApp();
+  const { user, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  function handleLogout() {
-    dispatch({ type: 'LOGOUT' });
+  async function handleLogout() {
+    await signOut();
     navigate('/login');
   }
+
+  const userName = user?.user_metadata?.username || user?.email?.split('@')[0] || 'Usuário';
+  const userEmail = user?.email || '';
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -76,8 +79,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
             {sidebarOpen && (
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-sidebar-accent-foreground truncate">{state.user.name}</p>
-                <p className="text-xs truncate" style={{ color: 'hsl(var(--sidebar-foreground))' }}>{state.user.email}</p>
+                <p className="text-xs font-semibold text-sidebar-accent-foreground truncate">{userName}</p>
+                <p className="text-xs truncate" style={{ color: 'hsl(var(--sidebar-foreground))' }}>{userEmail}</p>
               </div>
             )}
           </Link>

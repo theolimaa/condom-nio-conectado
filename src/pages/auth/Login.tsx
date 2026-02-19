@@ -4,22 +4,30 @@ import { Building2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useApp } from '@/lib/store';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Login() {
-  const { dispatch } = useApp();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('roberto@imoveis.com');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+    setError('');
     if (!email || !password) { setError('Preencha todos os campos.'); return; }
     if (password.length < 6) { setError('Senha deve ter ao menos 6 caracteres.'); return; }
-    dispatch({ type: 'LOGIN' });
-    navigate('/dashboard');
+    setLoading(true);
+    const { error } = await signIn(email, password);
+    setLoading(false);
+    if (error) {
+      setError('Email ou senha incorretos.');
+    } else {
+      navigate('/dashboard');
+    }
   }
 
   return (
@@ -41,7 +49,7 @@ export default function Login() {
           </p>
         </div>
         <div className="flex gap-8">
-          {[{ label: 'Condomínios', value: '3+' }, { label: 'Apartamentos', value: '26+' }, { label: 'Contratos', value: '100%' }].map(s => (
+          {[{ label: 'Condomínios', value: '∞' }, { label: 'Apartamentos', value: '∞' }, { label: 'Contratos', value: '100%' }].map(s => (
             <div key={s.label}>
               <p className="text-2xl font-bold text-white">{s.value}</p>
               <p className="text-sm" style={{ color: 'hsl(var(--sidebar-foreground))' }}>{s.label}</p>
@@ -101,7 +109,9 @@ export default function Login() {
 
               {error && <p className="text-sm text-destructive">{error}</p>}
 
-              <Button type="submit" className="w-full" size="lg">Entrar</Button>
+              <Button type="submit" className="w-full" size="lg" disabled={loading}>
+                {loading ? 'Entrando...' : 'Entrar'}
+              </Button>
             </form>
 
             <p className="text-center text-sm text-muted-foreground mt-6">
