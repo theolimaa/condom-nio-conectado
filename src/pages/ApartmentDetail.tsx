@@ -1,36 +1,36 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Plus, UserCheck, UserX, History } from 'lucide-react';
+import { ChevronLeft, Plus, UserCheck, UserX, History, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useApp } from '@/lib/store';
-import { Tenant } from '@/lib/types';
-import { formatDate, generateId } from '@/lib/utils-app';
+import { formatDate } from '@/lib/utils-app';
 import Layout from '@/components/Layout';
-import TenantTab from '@/components/apartment/TenantTab';
-import DocumentsTab from '@/components/apartment/DocumentsTab';
-import ContractTab from '@/components/apartment/ContractTab';
-import FinancialTab from '@/components/apartment/FinancialTab';
+import { useApartment } from '@/hooks/useApartments';
+import { useTenants, useAddTenant, usePreviousTenants } from '@/hooks/useTenants';
+import { useCondominiums } from '@/hooks/useCondominiums';
+import TenantTabDB from '@/components/apartment/TenantTabDB';
+import DocumentsTabDB from '@/components/apartment/DocumentsTabDB';
+import ContractTabDB from '@/components/apartment/ContractTabDB';
+import FinancialTabDB from '@/components/apartment/FinancialTabDB';
 
 function AddTenantModal({ open, onClose, apartmentId }: { open: boolean; onClose: () => void; apartmentId: string }) {
-  const { dispatch } = useApp();
-  const [form, setForm] = useState({ name: '', cpf: '', phone: '', email: '' });
+  const addTenant = useAddTenant();
+  const [form, setForm] = useState({ first_name: '', last_name: '', cpf: '', phone: '', email: '' });
 
-  function handleSave() {
-    if (!form.name) return;
-    const tenant: Tenant = {
-      id: generateId(),
-      apartmentId,
-      ...form,
-      additionalResidents: [],
-      documents: [],
-      isCurrent: true,
-      movedInAt: new Date().toISOString().split('T')[0],
-    };
-    dispatch({ type: 'ADD_TENANT', payload: { apartmentId, tenant } });
+  async function handleSave() {
+    if (!form.first_name) return;
+    await addTenant.mutateAsync({
+      apartment_id: apartmentId,
+      first_name: form.first_name,
+      last_name: form.last_name,
+      cpf: form.cpf || null,
+      phone: form.phone || null,
+      email: form.email || null,
+      birth_date: null,
+    });
     onClose();
   }
 
@@ -41,9 +41,15 @@ function AddTenantModal({ open, onClose, apartmentId }: { open: boolean; onClose
           <DialogTitle>Adicionar Inquilino</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          <div>
-            <Label>Nome completo *</Label>
-            <Input className="mt-1" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Nome do inquilino" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Nome *</Label>
+              <Input className="mt-1" value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} placeholder="Nome" />
+            </div>
+            <div>
+              <Label>Sobrenome</Label>
+              <Input className="mt-1" value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} placeholder="Sobrenome" />
+            </div>
           </div>
           <div>
             <Label>CPF</Label>
@@ -60,7 +66,10 @@ function AddTenantModal({ open, onClose, apartmentId }: { open: boolean; onClose
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave}>Adicionar Inquilino</Button>
+          <Button onClick={handleSave} disabled={addTenant.isPending}>
+            {addTenant.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Adicionar Inquilino
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -70,12 +79,28 @@ function AddTenantModal({ open, onClose, apartmentId }: { open: boolean; onClose
 export default function ApartmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { state, dispatch } = useApp();
   const [showAddTenant, setShowAddTenant] = useState(false);
   const [activeTab, setActiveTab] = useState('tenant');
-  const [historyTab, setHistoryTab] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
-  const apartment = state.apartments.find(a => a.id === id);
+  const { data: apartment, isLoading: loadingApt } = useApartment(id!);
+  const { data: tenants = [], isLoading: loadingTenants } = useTenants(id);
+  const { data: condominiums = [] } = useCondominiums();
+  const { data: previousTenants = [] } = usePreviousTenants(id!);
+
+  const currentTenant = tenants[0]; // most recent active tenant
+  const cond = condominiums.find(c => c.id === apartment?.condominium_id);
+
+  if (loadingApt || loadingTenants) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        </div>
+      </Layout>
+    );
+  }
+
   if (!apartment) {
     return (
       <Layout>
@@ -87,14 +112,6 @@ export default function ApartmentDetail() {
     );
   }
 
-  const cond = state.condominiums.find(c => c.id === apartment.condominiumId);
-  const currentTenant = apartment.tenants.find(t => t.id === apartment.currentTenantId);
-  const formerTenants = apartment.tenants.filter(t => !t.isCurrent);
-
-  function handleDeleteTenant(tenantId: string) {
-    dispatch({ type: 'DELETE_TENANT', payload: { apartmentId: apartment.id, tenantId } });
-  }
-
   return (
     <Layout>
       <div className="p-6 space-y-5">
@@ -102,21 +119,21 @@ export default function ApartmentDetail() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate(`/condominiums/${apartment.condominiumId}`)}
+              onClick={() => navigate(`/condominiums/${apartment.condominium_id}`)}
               className="p-2 rounded-lg hover:bg-muted transition-colors"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold">Apartamento {apartment.number}</h1>
+                <h1 className="text-2xl font-bold">Apartamento {apartment.unit_number}</h1>
                 {currentTenant ? (
                   <span className="badge-active flex items-center gap-1"><UserCheck className="w-3 h-3" /> Ocupado</span>
                 ) : (
                   <span className="badge-unpaid flex items-center gap-1"><UserX className="w-3 h-3" /> Vago</span>
                 )}
               </div>
-              <p className="text-muted-foreground text-sm">{cond?.name} · {apartment.floor}º andar · {apartment.description}</p>
+              <p className="text-muted-foreground text-sm">{cond?.name}</p>
             </div>
           </div>
           {!currentTenant && (
@@ -131,35 +148,40 @@ export default function ApartmentDetail() {
           <div className="bg-card rounded-xl border border-border">
             <div className="flex items-center gap-4 p-4 border-b border-border">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-sm font-bold text-primary">{currentTenant.name.charAt(0)}</span>
+                <span className="text-sm font-bold text-primary">{currentTenant.first_name.charAt(0)}</span>
               </div>
               <div>
-                <p className="font-semibold">{currentTenant.name}</p>
-                <p className="text-sm text-muted-foreground">Desde {formatDate(currentTenant.movedInAt)}</p>
+                <p className="font-semibold">{currentTenant.first_name} {currentTenant.last_name}</p>
+                <p className="text-sm text-muted-foreground">Desde {formatDate(currentTenant.created_at)}</p>
               </div>
             </div>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="p-4">
               <TabsList className="mb-4">
                 <TabsTrigger value="tenant">Inquilino</TabsTrigger>
-                <TabsTrigger value="documents">Documentos ({currentTenant.documents.length})</TabsTrigger>
+                <TabsTrigger value="documents">Documentos</TabsTrigger>
                 <TabsTrigger value="contract">Contrato</TabsTrigger>
                 <TabsTrigger value="financial">Financeiro</TabsTrigger>
               </TabsList>
               <TabsContent value="tenant">
-                <TenantTab
-                  tenant={currentTenant}
-                  apartmentId={apartment.id}
-                  onDelete={() => handleDeleteTenant(currentTenant.id)}
-                />
+                <TenantTabDB tenant={currentTenant} apartmentId={apartment.id} />
               </TabsContent>
               <TabsContent value="documents">
-                <DocumentsTab tenant={currentTenant} apartmentId={apartment.id} />
+                <DocumentsTabDB tenantId={currentTenant.id} />
               </TabsContent>
               <TabsContent value="contract">
-                <ContractTab tenant={currentTenant} apartmentId={apartment.id} />
+                <ContractTabDB
+                  tenantId={currentTenant.id}
+                  apartmentId={apartment.id}
+                  tenantName={`${currentTenant.first_name} ${currentTenant.last_name}`}
+                />
               </TabsContent>
               <TabsContent value="financial">
-                <FinancialTab apartment={apartment} tenant={currentTenant} />
+                <FinancialTabDB
+                  apartmentId={apartment.id}
+                  tenantId={currentTenant.id}
+                  tenantName={`${currentTenant.first_name} ${currentTenant.last_name}`}
+                  tenantCpf={currentTenant.cpf ?? ''}
+                />
               </TabsContent>
             </Tabs>
           </div>
@@ -175,58 +197,38 @@ export default function ApartmentDetail() {
         )}
 
         {/* Former tenants */}
-        {formerTenants.length > 0 && (
+        {previousTenants.length > 0 && (
           <div className="bg-card rounded-xl border border-border">
             <button
               className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors rounded-xl"
-              onClick={() => setHistoryTab(!historyTab)}
+              onClick={() => setHistoryOpen(!historyOpen)}
             >
               <div className="flex items-center gap-2">
                 <History className="w-5 h-5 text-muted-foreground" />
                 <span className="font-semibold">Inquilinos Anteriores</span>
-                <span className="badge-unpaid">{formerTenants.length}</span>
+                <span className="badge-unpaid">{previousTenants.length}</span>
               </div>
-              <span className="text-muted-foreground text-sm">{historyTab ? '▲' : '▼'}</span>
+              <span className="text-muted-foreground text-sm">{historyOpen ? '▲' : '▼'}</span>
             </button>
-            {historyTab && (
+            {historyOpen && (
               <div className="border-t border-border divide-y divide-border">
-                {formerTenants.map(t => (
+                {previousTenants.map(t => (
                   <div key={t.id} className="p-4">
-                    <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-                          <span className="text-sm font-bold text-muted-foreground">{t.name.charAt(0)}</span>
+                          <span className="text-sm font-bold text-muted-foreground">{t.first_name.charAt(0)}</span>
                         </div>
                         <div>
-                          <p className="font-medium">{t.name}</p>
+                          <p className="font-medium">{t.first_name} {t.last_name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {formatDate(t.movedInAt)} → {t.movedOutAt ? formatDate(t.movedOutAt) : 'atual'}
+                            Arquivado em: {t.archived_at ? formatDate(t.archived_at) : '—'}
                           </p>
+                          {t.cpf && <p className="text-xs text-muted-foreground">CPF: {t.cpf}</p>}
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <span className="badge-closed">Encerrado</span>
-                        <button
-                          onClick={() => handleDeleteTenant(t.id)}
-                          className="text-xs text-destructive hover:underline"
-                        >
-                          Excluir
-                        </button>
-                      </div>
+                      <span className="badge-closed">Encerrado</span>
                     </div>
-                    {/* Financials for former tenant */}
-                    <Tabs defaultValue="financial">
-                      <TabsList className="mb-3 h-8">
-                        <TabsTrigger value="financial" className="text-xs">Financeiro</TabsTrigger>
-                        <TabsTrigger value="docs" className="text-xs">Documentos ({t.documents.length})</TabsTrigger>
-                      </TabsList>
-                      <TabsContent value="financial">
-                        <FinancialTab apartment={apartment} tenant={t} />
-                      </TabsContent>
-                      <TabsContent value="docs">
-                        <DocumentsTab tenant={t} apartmentId={apartment.id} />
-                      </TabsContent>
-                    </Tabs>
                   </div>
                 ))}
               </div>

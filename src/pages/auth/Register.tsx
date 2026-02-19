@@ -4,23 +4,30 @@ import { Building2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useApp } from '@/lib/store';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Register() {
-  const { dispatch } = useApp();
+  const { signUp } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', phone: '', cpf: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  function handleRegister(e: React.FormEvent) {
+  async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
+    setError('');
     if (!form.name || !form.email || !form.password) { setError('Preencha todos os campos obrigatórios.'); return; }
     if (form.password !== form.confirm) { setError('As senhas não coincidem.'); return; }
     if (form.password.length < 6) { setError('Senha deve ter ao menos 6 caracteres.'); return; }
-    dispatch({ type: 'UPDATE_USER', payload: { name: form.name, email: form.email, phone: form.phone, cpf: form.cpf } });
-    dispatch({ type: 'LOGIN' });
-    navigate('/dashboard');
+    setLoading(true);
+    const { error } = await signUp(form.email, form.password, form.name);
+    setLoading(false);
+    if (error) {
+      setError(error.message);
+    } else {
+      navigate('/dashboard');
+    }
   }
 
   return (
@@ -41,19 +48,9 @@ export default function Register() {
               <Label>Nome completo *</Label>
               <Input className="mt-1" placeholder="Seu nome" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Email *</Label>
-                <Input className="mt-1" type="email" placeholder="seu@email.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-              </div>
-              <div>
-                <Label>Telefone</Label>
-                <Input className="mt-1" placeholder="(85) 99999-9999" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
-              </div>
-            </div>
             <div>
-              <Label>CPF</Label>
-              <Input className="mt-1" placeholder="000.000.000-00" value={form.cpf} onChange={e => setForm({ ...form, cpf: e.target.value })} />
+              <Label>Email *</Label>
+              <Input className="mt-1" type="email" placeholder="seu@email.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
             </div>
             <div>
               <Label>Senha *</Label>
@@ -69,7 +66,9 @@ export default function Register() {
               <Input className="mt-1" type="password" placeholder="••••••••" value={form.confirm} onChange={e => setForm({ ...form, confirm: e.target.value })} />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full mt-2" size="lg">Criar conta</Button>
+            <Button type="submit" className="w-full mt-2" size="lg" disabled={loading}>
+              {loading ? 'Criando conta...' : 'Criar conta'}
+            </Button>
           </form>
 
           <p className="text-center text-sm text-muted-foreground mt-6">

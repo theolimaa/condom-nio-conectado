@@ -4,14 +4,26 @@ import { Building2, ArrowLeft, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function ForgotPassword() {
+  const { resetPassword } = useAuth();
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (email) setSent(true);
+    if (!email) return;
+    setLoading(true);
+    const { error } = await resetPassword(email);
+    setLoading(false);
+    if (error) {
+      setError(error.message);
+    } else {
+      setSent(true);
+    }
   }
 
   return (
@@ -45,7 +57,10 @@ export default function ForgotPassword() {
                   <Label>Email</Label>
                   <Input className="mt-1" type="email" placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} />
                 </div>
-                <Button type="submit" className="w-full" size="lg">Enviar link</Button>
+                {error && <p className="text-sm text-destructive">{error}</p>}
+                <Button type="submit" className="w-full" size="lg" disabled={loading}>
+                  {loading ? 'Enviando...' : 'Enviar link'}
+                </Button>
               </form>
               <Link to="/login" className="flex items-center justify-center gap-1 text-sm text-muted-foreground mt-4 hover:text-foreground">
                 <ArrowLeft className="w-4 h-4" /> Voltar ao login

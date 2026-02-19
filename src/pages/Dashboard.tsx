@@ -6,35 +6,27 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { formatCurrency, MONTHS } from '@/lib/utils-app';
 import { useApp } from '@/lib/store';
-import { Condominium } from '@/lib/types';
-import { formatCurrency, generateId, MONTHS } from '@/lib/utils-app';
 import GlobalFilter from '@/components/GlobalFilter';
 import Layout from '@/components/Layout';
+import { useCondominiums, useAddCondominium, useUpdateCondominium, useDeleteCondominium, CondominiumDB } from '@/hooks/useCondominiums';
+import { useApartments } from '@/hooks/useApartments';
+import { useAllFinancialRecords } from '@/hooks/useFinancial';
 
-function CondominiumModal({
-  open, onClose, initial
-}: {
-  open: boolean; onClose: () => void; initial?: Condominium;
+function CondominiumModal({ open, onClose, initial }: {
+  open: boolean; onClose: () => void; initial?: CondominiumDB;
 }) {
-  const { dispatch } = useApp();
-  const [form, setForm] = useState({
-    name: initial?.name ?? '',
-    address: initial?.address ?? '',
-    city: initial?.city ?? 'Fortaleza',
-    state: initial?.state ?? 'CE',
-    totalApartments: initial?.totalApartments ?? 1,
-  });
+  const addCond = useAddCondominium();
+  const updateCond = useUpdateCondominium();
+  const [name, setName] = useState(initial?.name ?? '');
 
-  function handleSave() {
-    if (!form.name || !form.address) return;
+  async function handleSave() {
+    if (!name) return;
     if (initial) {
-      dispatch({ type: 'UPDATE_CONDOMINIUM', payload: { ...initial, ...form } });
+      await updateCond.mutateAsync({ id: initial.id, name });
     } else {
-      dispatch({
-        type: 'ADD_CONDOMINIUM',
-        payload: { id: generateId(), ...form, createdAt: new Date().toISOString().split('T')[0] },
-      });
+      await addCond.mutateAsync(name);
     }
     onClose();
   }
@@ -48,30 +40,14 @@ function CondominiumModal({
         <div className="space-y-4 py-2">
           <div>
             <Label>Nome *</Label>
-            <Input className="mt-1" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Residencial Alfa" />
-          </div>
-          <div>
-            <Label>Endereço *</Label>
-            <Input className="mt-1" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Rua das Flores, 123" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Cidade</Label>
-              <Input className="mt-1" value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} />
-            </div>
-            <div>
-              <Label>Estado</Label>
-              <Input className="mt-1" value={form.state} onChange={e => setForm({ ...form, state: e.target.value })} />
-            </div>
-          </div>
-          <div>
-            <Label>Qtd. Apartamentos</Label>
-            <Input className="mt-1" type="number" min={1} value={form.totalApartments} onChange={e => setForm({ ...form, totalApartments: Number(e.target.value) })} />
+            <Input className="mt-1" value={name} onChange={e => setName(e.target.value)} placeholder="Residencial Alfa" />
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave}>{initial ? 'Salvar' : 'Adicionar'}</Button>
+          <Button onClick={handleSave} disabled={addCond.isPending || updateCond.isPending}>
+            {initial ? 'Salvar' : 'Adicionar'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -79,41 +55,45 @@ function CondominiumModal({
 }
 
 export default function Dashboard() {
-  const { state, dispatch } = useApp();
   const navigate = useNavigate();
+  const { state } = useApp();
   const [showAdd, setShowAdd] = useState(false);
-  const [editCond, setEditCond] = useState<Condominium | null>(null);
-  const [deleteCond, setDeleteCond] = useState<Condominium | null>(null);
+  const [editCond, setEditCond] = useState<CondominiumDB | null>(null);
+  const [deleteCond, setDeleteCond] = useState<CondominiumDB | null>(null);
 
-  const { apartments, condominiums, selectedYear, selectedMonth } = state;
+  const { data: condominiums = [], isLoading: loadingConds } = useCondominiums();
+  const { data: apartments = [] } = useApartments();
+  const { data: financialRecords = [] } = useAllFinancialRecords();
+  const deleteCondo = useDeleteCondominium();
 
-  // Financial calculations filtered by year/month (by paidAt date)
-  const allPayments = apartments.flatMap(a => a.payments);
-  const filteredPayments = allPayments.filter(p => {
-    const date = p.paidAt ? new Date(p.paidAt) : new Date(p.dueDate);
-    const matchYear = new Date(p.paidAt || p.dueDate).getFullYear() === selectedYear;
-    const matchMonth = selectedMonth === null || new Date(p.paidAt || p.dueDate).getMonth() === selectedMonth;
+  const { selectedYear, selectedMonth } = state;
+
+  // Filter financial records by year/month
+  const filteredRecords = financialRecords.filter(r => {
+    const [year, month] = r.month.split('-').map(Number);
+    const matchYear = year === selectedYear;
+    const matchMonth = selectedMonth === null || month - 1 === selectedMonth;
     return matchYear && matchMonth;
   });
 
-  const totalReceived = filteredPayments.filter(p => p.status === 'paid').reduce((s, p) => s + p.value, 0);
-  const totalExpected = filteredPayments.reduce((s, p) => s + p.value, 0);
-  const totalOverdue = filteredPayments.filter(p => p.status === 'overdue').reduce((s, p) => s + p.value, 0);
-  const totalUnpaid = filteredPayments.filter(p => p.status === 'unpaid').reduce((s, p) => s + p.value, 0);
+  const totalReceived = filteredRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
+  const totalPending = filteredRecords.filter(r => !r.paid && r.status !== 'Inadimplente').reduce((s, r) => s + r.rent_value, 0);
+  const totalOverdue = filteredRecords.filter(r => r.status === 'Inadimplente').reduce((s, r) => s + r.rent_value, 0);
 
-  const occupiedApts = apartments.filter(a => a.currentTenantId).length;
-  const totalApts = apartments.length;
+  const occupiedApts = apartments.filter(a => {
+    // An apartment is occupied if it has at least one tenant — we rely on tenant count
+    return false; // will be enriched below
+  }).length;
 
   // Monthly breakdown
   const monthlyData = MONTHS.map((month, idx) => {
-    const monthPayments = allPayments.filter(p => {
-      const d = new Date(p.paidAt || p.dueDate);
-      return d.getFullYear() === selectedYear && d.getMonth() === idx;
-    });
-    return {
-      month,
-      received: monthPayments.filter(p => p.status === 'paid').reduce((s, p) => s + p.value, 0),
-    };
+    const monthPaid = financialRecords
+      .filter(r => {
+        const [y, m] = r.month.split('-').map(Number);
+        return y === selectedYear && m - 1 === idx && r.paid;
+      })
+      .reduce((s, r) => s + r.rent_value, 0);
+    return { month, received: monthPaid };
   });
 
   return (
@@ -152,7 +132,7 @@ export default function Dashboard() {
                 <DollarSign className="w-4 h-4" style={{ color: 'hsl(var(--warning))' }} />
               </div>
             </div>
-            <p className="text-2xl font-bold" style={{ color: 'hsl(var(--warning))' }}>{formatCurrency(totalUnpaid)}</p>
+            <p className="text-2xl font-bold" style={{ color: 'hsl(var(--warning))' }}>{formatCurrency(totalPending)}</p>
             <p className="text-xs text-muted-foreground mt-1">Aguardando pagamento</p>
           </div>
           <div className="stat-card">
@@ -167,13 +147,13 @@ export default function Dashboard() {
           </div>
           <div className="stat-card">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-muted-foreground">Ocupação</p>
+              <p className="text-sm text-muted-foreground">Apartamentos</p>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary/10">
                 <Home className="w-4 h-4 text-primary" />
               </div>
             </div>
-            <p className="text-2xl font-bold">{occupiedApts}/{totalApts}</p>
-            <p className="text-xs text-muted-foreground mt-1">{totalApts > 0 ? Math.round((occupiedApts / totalApts) * 100) : 0}% ocupado</p>
+            <p className="text-2xl font-bold">{apartments.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">em {condominiums.length} condomínio(s)</p>
           </div>
         </div>
 
@@ -206,7 +186,11 @@ export default function Dashboard() {
         {/* Condominiums grid */}
         <div>
           <h2 className="text-base font-semibold mb-3">Condomínios</h2>
-          {condominiums.length === 0 ? (
+          {loadingConds ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : condominiums.length === 0 ? (
             <div className="bg-card border border-dashed border-border rounded-xl p-12 text-center">
               <Building2 className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
               <p className="text-muted-foreground">Nenhum condomínio cadastrado</p>
@@ -215,14 +199,14 @@ export default function Dashboard() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {condominiums.map(cond => {
-                const condApts = apartments.filter(a => a.condominiumId === cond.id);
-                const condOccupied = condApts.filter(a => a.currentTenantId).length;
-                const condPayments = condApts.flatMap(a => a.payments).filter(p => {
-                  const matchYear = new Date(p.paidAt || p.dueDate).getFullYear() === selectedYear;
-                  const matchMonth = selectedMonth === null || new Date(p.paidAt || p.dueDate).getMonth() === selectedMonth;
-                  return matchYear && matchMonth;
+                const condApts = apartments.filter(a => a.condominium_id === cond.id);
+                const condRecords = financialRecords.filter(r => {
+                  const [y, m] = r.month.split('-').map(Number);
+                  return condApts.some(a => a.id === r.apartment_id) &&
+                    y === selectedYear &&
+                    (selectedMonth === null || m - 1 === selectedMonth);
                 });
-                const condReceived = condPayments.filter(p => p.status === 'paid').reduce((s, p) => s + p.value, 0);
+                const condReceived = condRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
 
                 return (
                   <div key={cond.id} className="bg-card rounded-xl border border-border overflow-hidden hover:shadow-md transition-shadow">
@@ -233,13 +217,13 @@ export default function Dashboard() {
                         </div>
                         <div className="flex gap-1">
                           <button
-                            onClick={(e) => { e.stopPropagation(); setEditCond(cond); }}
+                            onClick={e => { e.stopPropagation(); setEditCond(cond); }}
                             className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); setDeleteCond(cond); }}
+                            onClick={e => { e.stopPropagation(); setDeleteCond(cond); }}
                             className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -247,11 +231,10 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <h3 className="font-semibold text-base">{cond.name}</h3>
-                      <p className="text-sm text-muted-foreground mt-0.5">{cond.address}, {cond.city}/{cond.state}</p>
                       <div className="flex items-center justify-between mt-4">
                         <div>
                           <p className="text-xs text-muted-foreground">Apartamentos</p>
-                          <p className="font-semibold">{condOccupied}/{condApts.length} ocupados</p>
+                          <p className="font-semibold">{condApts.length}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-xs text-muted-foreground">Receita</p>
@@ -283,13 +266,16 @@ export default function Dashboard() {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir Condomínio</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir <strong>{deleteCond?.name}</strong>? Todos os apartamentos, inquilinos e dados vinculados serão excluídos permanentemente.
+              Tem certeza que deseja excluir <strong>{deleteCond?.name}</strong>? Todos os apartamentos e dados vinculados serão excluídos permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => { dispatch({ type: 'DELETE_CONDOMINIUM', payload: deleteCond!.id }); setDeleteCond(null); }}
+              onClick={async () => {
+                await deleteCondo.mutateAsync(deleteCond!.id);
+                setDeleteCond(null);
+              }}
               className="bg-destructive hover:bg-destructive/90"
             >
               Excluir

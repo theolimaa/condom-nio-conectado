@@ -1,22 +1,54 @@
 import { useState } from 'react';
-import { User, Save } from 'lucide-react';
+import { Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useApp } from '@/lib/store';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import Layout from '@/components/Layout';
 
 export default function Profile() {
-  const { state, dispatch } = useApp();
-  const [form, setForm] = useState({ ...state.user });
-  const [saved, setSaved] = useState(false);
+  const { user } = useAuth();
+  const [form, setForm] = useState({
+    username: user?.user_metadata?.username || '',
+    email: user?.email || '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [loading, setLoading] = useState(false);
 
-  function handleSave(e: React.FormEvent) {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    dispatch({ type: 'UPDATE_USER', payload: form });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setLoading(true);
+
+    const updates: { data?: { username: string }; password?: string } = {};
+    if (form.username) updates.data = { username: form.username };
+    if (form.newPassword) {
+      if (form.newPassword !== form.confirmPassword) {
+        toast.error('As senhas não coincidem.');
+        setLoading(false);
+        return;
+      }
+      if (form.newPassword.length < 6) {
+        toast.error('Senha deve ter ao menos 6 caracteres.');
+        setLoading(false);
+        return;
+      }
+      updates.password = form.newPassword;
+    }
+
+    const { error } = await supabase.auth.updateUser(updates as Parameters<typeof supabase.auth.updateUser>[0]);
+    setLoading(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Perfil atualizado!');
+      setForm(f => ({ ...f, newPassword: '', confirmPassword: '' }));
+    }
   }
+
+  const displayName = user?.user_metadata?.username || user?.email?.split('@')[0] || 'Usuário';
 
   return (
     <Layout>
@@ -28,35 +60,39 @@ export default function Profile() {
         <div className="bg-card rounded-xl border border-border p-6">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="text-2xl font-bold text-primary">{state.user.name.charAt(0)}</span>
+              <span className="text-2xl font-bold text-primary">{displayName.charAt(0).toUpperCase()}</span>
             </div>
             <div>
-              <p className="font-semibold text-lg">{state.user.name}</p>
-              <p className="text-muted-foreground text-sm">{state.user.email}</p>
+              <p className="font-semibold text-lg">{displayName}</p>
+              <p className="text-muted-foreground text-sm">{user?.email}</p>
             </div>
           </div>
           <form onSubmit={handleSave} className="space-y-4">
             <div>
-              <Label>Nome completo</Label>
-              <Input className="mt-1" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Email</Label>
-                <Input className="mt-1" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-              </div>
-              <div>
-                <Label>Telefone</Label>
-                <Input className="mt-1" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
-              </div>
+              <Label>Nome de usuário</Label>
+              <Input className="mt-1" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} placeholder="Seu nome" />
             </div>
             <div>
-              <Label>CPF</Label>
-              <Input className="mt-1" value={form.cpf} onChange={e => setForm({ ...form, cpf: e.target.value })} />
+              <Label>Email</Label>
+              <Input className="mt-1 opacity-60 cursor-not-allowed" type="email" value={form.email} disabled />
+              <p className="text-xs text-muted-foreground mt-1">O email não pode ser alterado aqui.</p>
             </div>
-            <Button type="submit" className="w-full">
-              <Save className="w-4 h-4 mr-2" />
-              {saved ? 'Salvo!' : 'Salvar Alterações'}
+            <div className="border-t border-border pt-4">
+              <p className="text-sm font-medium mb-3">Alterar Senha</p>
+              <div className="space-y-3">
+                <div>
+                  <Label>Nova Senha</Label>
+                  <Input className="mt-1" type="password" placeholder="Nova senha (mín. 6 caracteres)" value={form.newPassword} onChange={e => setForm({ ...form, newPassword: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Confirmar Nova Senha</Label>
+                  <Input className="mt-1" type="password" placeholder="Confirme a nova senha" value={form.confirmPassword} onChange={e => setForm({ ...form, confirmPassword: e.target.value })} />
+                </div>
+              </div>
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+              {loading ? 'Salvando...' : 'Salvar Alterações'}
             </Button>
           </form>
         </div>
