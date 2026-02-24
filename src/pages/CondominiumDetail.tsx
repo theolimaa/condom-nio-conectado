@@ -13,7 +13,7 @@ import Layout from '@/components/Layout';
 import { useCondominiums } from '@/hooks/useCondominiums';
 import { useApartments, useAddApartment, useUpdateApartment, useDeleteApartment, ApartmentDB } from '@/hooks/useApartments';
 import { useTenants } from '@/hooks/useTenants';
-import { useFinancialRecords } from '@/hooks/useFinancial';
+import { useAllFinancialRecords } from '@/hooks/useFinancial';
 
 function ApartmentModal({ open, onClose, condominiumId, initial }: {
   open: boolean; onClose: () => void; condominiumId: string; initial?: ApartmentDB;
@@ -55,11 +55,12 @@ function ApartmentModal({ open, onClose, condominiumId, initial }: {
   );
 }
 
-function ApartmentCard({ apt, condominiumId, selectedYear, selectedMonth }: {
+function ApartmentCard({ apt, condominiumId, selectedYear, selectedMonth, allFinancialRecords }: {
   apt: ApartmentDB;
   condominiumId: string;
   selectedYear: number;
   selectedMonth: number | null;
+  allFinancialRecords: { apartment_id: string; paid: boolean | null; rent_value: number; month: string; status: string | null }[];
 }) {
   const navigate = useNavigate();
   const deleteApt = useDeleteApartment();
@@ -67,15 +68,20 @@ function ApartmentCard({ apt, condominiumId, selectedYear, selectedMonth }: {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   const { data: tenants = [] } = useTenants(apt.id);
-  const { data: records = [] } = useFinancialRecords(apt.id);
 
-  const currentTenant = tenants[0]; // most recent
-  const aptRecords = records.filter(r => {
+  const currentTenant = tenants[0];
+  const aptRecords = allFinancialRecords.filter(r => {
+    if (r.apartment_id !== apt.id) return false;
     const [y, m] = r.month.split('-').map(Number);
     return y === selectedYear && (selectedMonth === null || m - 1 === selectedMonth);
   });
   const received = aptRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
-  const overdue = aptRecords.some(r => r.status === 'Inadimplente');
+  const overdue = aptRecords.some(r => {
+    if (r.paid) return false;
+    const today = new Date();
+    const [year, month] = r.month.split('-').map(Number);
+    return year < today.getFullYear() || (year === today.getFullYear() && month < today.getMonth() + 1);
+  });
 
   return (
     <>
@@ -164,17 +170,20 @@ export default function CondominiumDetail() {
 
   const { data: condominiums = [] } = useCondominiums();
   const { data: apartments = [], isLoading } = useApartments(id);
-  const { data: financialRecords = [] } = useFinancialRecords(id ?? '');
+  // Use global financial records for accurate revenue
+  const { data: allFinancialRecords = [] } = useAllFinancialRecords();
 
   const cond = condominiums.find(c => c.id === id);
   const { selectedYear, selectedMonth } = state;
 
-  const totalReceived = financialRecords
-    .filter(r => {
-      const [y, m] = r.month.split('-').map(Number);
-      return r.paid && y === selectedYear && (selectedMonth === null || m - 1 === selectedMonth);
-    })
-    .reduce((s, r) => s + r.rent_value, 0);
+  // Filter financial records for this condominium's apartments
+  const condApts = apartments.filter(a => a.condominium_id === id);
+  const condRecords = allFinancialRecords.filter(r => {
+    if (!condApts.some(a => a.id === r.apartment_id)) return false;
+    const [y, m] = r.month.split('-').map(Number);
+    return r.paid && y === selectedYear && (selectedMonth === null || m - 1 === selectedMonth);
+  });
+  const totalReceived = condRecords.reduce((s, r) => s + r.rent_value, 0);
 
   if (!cond && !isLoading) return (
     <Layout>
@@ -242,6 +251,7 @@ export default function CondominiumDetail() {
                 condominiumId={id!}
                 selectedYear={selectedYear}
                 selectedMonth={selectedMonth}
+                allFinancialRecords={allFinancialRecords}
               />
             ))}
           </div>

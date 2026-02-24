@@ -81,14 +81,13 @@ export default function ApartmentDetail() {
   const navigate = useNavigate();
   const [showAddTenant, setShowAddTenant] = useState(false);
   const [activeTab, setActiveTab] = useState('tenant');
-  const [historyOpen, setHistoryOpen] = useState(false);
 
   const { data: apartment, isLoading: loadingApt } = useApartment(id!);
   const { data: tenants = [], isLoading: loadingTenants } = useTenants(id);
   const { data: condominiums = [] } = useCondominiums();
   const { data: previousTenants = [] } = usePreviousTenants(id!);
 
-  const currentTenant = tenants[0]; // most recent active tenant
+  const currentTenant = tenants[0];
   const cond = condominiums.find(c => c.id === apartment?.condominium_id);
 
   if (loadingApt || loadingTenants) {
@@ -161,6 +160,7 @@ export default function ApartmentDetail() {
                 <TabsTrigger value="documents">Documentos</TabsTrigger>
                 <TabsTrigger value="contract">Contrato</TabsTrigger>
                 <TabsTrigger value="financial">Financeiro</TabsTrigger>
+                <TabsTrigger value="previous">Anteriores</TabsTrigger>
               </TabsList>
               <TabsContent value="tenant">
                 <TenantTabDB tenant={currentTenant} apartmentId={apartment.id} />
@@ -183,56 +183,88 @@ export default function ApartmentDetail() {
                   tenantCpf={currentTenant.cpf ?? ''}
                 />
               </TabsContent>
+              <TabsContent value="previous">
+                {previousTenants.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <History className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+                    <p>Nenhum inquilino anterior registrado.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border rounded-xl border border-border">
+                    {previousTenants.map(t => (
+                      <div key={t.id} className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
+                              <span className="text-sm font-bold text-muted-foreground">{t.first_name.charAt(0)}</span>
+                            </div>
+                            <div>
+                              <p className="font-medium">{t.first_name} {t.last_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Arquivado em: {t.archived_at ? formatDate(t.archived_at) : '—'}
+                              </p>
+                              {t.cpf && <p className="text-xs text-muted-foreground">CPF: {t.cpf}</p>}
+                              {t.email && <p className="text-xs text-muted-foreground">Email: {t.email}</p>}
+                              {t.phone && <p className="text-xs text-muted-foreground">Tel: {t.phone}</p>}
+                            </div>
+                          </div>
+                          <span className="badge-closed">Encerrado</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
             </Tabs>
           </div>
         ) : (
-          <div className="bg-card rounded-xl border border-dashed border-border p-12 text-center">
-            <UserX className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
-            <p className="font-medium mb-1">Apartamento vago</p>
-            <p className="text-muted-foreground text-sm mb-4">Nenhum inquilino ativo no momento</p>
-            <Button onClick={() => setShowAddTenant(true)}>
-              <Plus className="w-4 h-4 mr-2" /> Adicionar Inquilino
-            </Button>
-          </div>
-        )}
-
-        {/* Former tenants */}
-        {previousTenants.length > 0 && (
           <div className="bg-card rounded-xl border border-border">
-            <button
-              className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors rounded-xl"
-              onClick={() => setHistoryOpen(!historyOpen)}
-            >
-              <div className="flex items-center gap-2">
-                <History className="w-5 h-5 text-muted-foreground" />
-                <span className="font-semibold">Inquilinos Anteriores</span>
-                <span className="badge-unpaid">{previousTenants.length}</span>
-              </div>
-              <span className="text-muted-foreground text-sm">{historyOpen ? '▲' : '▼'}</span>
-            </button>
-            {historyOpen && (
-              <div className="border-t border-border divide-y divide-border">
-                {previousTenants.map(t => (
-                  <div key={t.id} className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-                          <span className="text-sm font-bold text-muted-foreground">{t.first_name.charAt(0)}</span>
-                        </div>
-                        <div>
-                          <p className="font-medium">{t.first_name} {t.last_name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Arquivado em: {t.archived_at ? formatDate(t.archived_at) : '—'}
-                          </p>
-                          {t.cpf && <p className="text-xs text-muted-foreground">CPF: {t.cpf}</p>}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="p-4">
+              <TabsList className="mb-4">
+                <TabsTrigger value="tenant" disabled>Inquilino</TabsTrigger>
+                <TabsTrigger value="previous">Anteriores</TabsTrigger>
+              </TabsList>
+              <TabsContent value="tenant">
+                <div className="bg-card rounded-xl border border-dashed border-border p-12 text-center">
+                  <UserX className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
+                  <p className="font-medium mb-1">Apartamento vago</p>
+                  <p className="text-muted-foreground text-sm mb-4">Nenhum inquilino ativo no momento</p>
+                  <Button onClick={() => setShowAddTenant(true)}>
+                    <Plus className="w-4 h-4 mr-2" /> Adicionar Inquilino
+                  </Button>
+                </div>
+              </TabsContent>
+              <TabsContent value="previous">
+                {previousTenants.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <History className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+                    <p>Nenhum inquilino anterior registrado.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border rounded-xl border border-border">
+                    {previousTenants.map(t => (
+                      <div key={t.id} className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
+                              <span className="text-sm font-bold text-muted-foreground">{t.first_name.charAt(0)}</span>
+                            </div>
+                            <div>
+                              <p className="font-medium">{t.first_name} {t.last_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Arquivado em: {t.archived_at ? formatDate(t.archived_at) : '—'}
+                              </p>
+                              {t.cpf && <p className="text-xs text-muted-foreground">CPF: {t.cpf}</p>}
+                            </div>
+                          </div>
+                          <span className="badge-closed">Encerrado</span>
                         </div>
                       </div>
-                      <span className="badge-closed">Encerrado</span>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
         )}
       </div>

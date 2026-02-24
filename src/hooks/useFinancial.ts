@@ -107,7 +107,7 @@ export function useDeleteFinancialRecord() {
   });
 }
 
-/** Generate monthly financial records from a contract */
+/** Generate monthly financial records from a contract (24 months) */
 export function generateMonthsForContract(
   apartmentId: string,
   tenantId: string,
@@ -117,13 +117,11 @@ export function generateMonthsForContract(
   paymentDay: number,
 ): Omit<FinancialRecordDB, 'id' | 'created_at' | 'updated_at'>[] {
   const records: Omit<FinancialRecordDB, 'id' | 'created_at' | 'updated_at'>[] = [];
-  const start = new Date(startDate);
-  const today = new Date();
+  const start = new Date(startDate + 'T12:00:00');
 
   for (let i = 0; i < 24; i++) {
     const d = new Date(start);
     d.setMonth(d.getMonth() + i);
-    if (d.getFullYear() > today.getFullYear() + 1) break;
 
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
