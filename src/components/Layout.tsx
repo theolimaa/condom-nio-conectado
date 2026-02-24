@@ -1,14 +1,13 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Building2, LayoutDashboard, LogOut, User, ChevronRight, Menu, X
+  LayoutDashboard, LogOut, User, ChevronRight, Menu, X, Home, Wallet
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-  { label: 'Condomínios', icon: Building2, path: '/condominiums' },
+  { label: 'Financeiro', icon: Wallet, path: '/financeiro' },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -38,11 +37,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
           <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary shrink-0">
-            <Building2 className="w-5 h-5 text-primary-foreground" />
+            <Home className="w-5 h-5 text-primary-foreground" />
           </div>
           {sidebarOpen && (
             <div>
-              <p className="text-sm font-bold text-sidebar-accent-foreground leading-tight">ImóvelGest</p>
+              <p className="text-sm font-bold text-sidebar-accent-foreground leading-tight">Living Gest</p>
               <p className="text-xs" style={{ color: 'hsl(var(--sidebar-foreground))' }}>Gestão de Imóveis</p>
             </div>
           )}

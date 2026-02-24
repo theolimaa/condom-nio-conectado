@@ -9,12 +9,14 @@ import { useApp } from '@/lib/store';
 import { formatCurrency, MONTHS, YEARS } from '@/lib/utils-app';
 import { useFinancialRecords, useUpsertFinancialRecord, FinancialRecordDB } from '@/hooks/useFinancial';
 import { useContract } from '@/hooks/useContracts';
+import { useTenants } from '@/hooks/useTenants';
+import { useApartment } from '@/hooks/useApartments';
+import ReceiptModalDB from './ReceiptModalDB';
 
 function getStatus(record: FinancialRecordDB): 'paid' | 'overdue' | 'pending' {
   if (record.paid) return 'paid';
   const today = new Date();
   const [year, month] = record.month.split('-').map(Number);
-  // If month has passed, it's overdue
   if (year < today.getFullYear() || (year === today.getFullYear() && month < today.getMonth() + 1)) {
     return 'overdue';
   }
@@ -85,13 +87,17 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
   const { state } = useApp();
   const { data: records = [], isLoading } = useFinancialRecords(apartmentId);
   const { data: contract } = useContract(tenantId);
+  const { data: apartment } = useApartment(apartmentId);
+  const { data: tenants = [] } = useTenants(apartmentId);
   const upsert = useUpsertFinancialRecord();
 
   const [filterYear, setFilterYear] = useState(String(state.selectedYear));
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [showAddPeriod, setShowAddPeriod] = useState(false);
+  const [receiptRecord, setReceiptRecord] = useState<FinancialRecordDB | null>(null);
 
   const tenantRecords = records.filter(r => r.tenant_id === tenantId);
+  const currentTenant = tenants.find(t => t.id === tenantId);
 
   const filteredRecords = tenantRecords.filter(r => {
     const [y, m] = r.month.split('-').map(Number);
@@ -103,6 +109,16 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
   const totalPaid = filteredRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
   const totalOverdue = filteredRecords.filter(r => getStatus(r) === 'overdue').reduce((s, r) => s + r.rent_value, 0);
   const totalPending = filteredRecords.filter(r => !r.paid && getStatus(r) === 'pending').reduce((s, r) => s + r.rent_value, 0);
+
+  const paymentDay = contract?.payment_day ?? 1;
+
+  function getPeriodLabel(month: string) {
+    const [y, m] = month.split('-').map(Number);
+    const startDay = String(paymentDay).padStart(2, '0');
+    const nextM = m === 12 ? 1 : m + 1;
+    const nextY = m === 12 ? y + 1 : y;
+    return `${startDay}/${String(m).padStart(2, '0')}/${y} a ${startDay}/${String(nextM).padStart(2, '0')}/${nextY}`;
+  }
 
   async function togglePaid(record: FinancialRecordDB) {
     const nowPaid = !record.paid;
@@ -169,7 +185,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-muted/50 border-b border-border">
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Mês Ref.</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Período Ref.</th>
                 <th className="text-right px-4 py-3 font-medium text-muted-foreground">Valor</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Pagamento</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Status</th>
@@ -179,11 +195,9 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
             <tbody>
               {filteredRecords.map(r => {
                 const st = getStatus(r);
-                const [y, m] = r.month.split('-').map(Number);
-                const monthName = MONTHS[m - 1];
                 return (
                   <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium">{monthName} {y}</td>
+                    <td className="px-4 py-3 font-medium text-xs">{getPeriodLabel(r.month)}</td>
                     <td className="px-4 py-3 text-right font-semibold">{formatCurrency(r.rent_value)}</td>
                     <td className="px-4 py-3 text-center text-muted-foreground">
                       {r.payment_date ? r.payment_date : '—'}
@@ -205,6 +219,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
                             : <CheckCircle className="w-4 h-4" style={{ color: 'hsl(var(--paid))' }} />}
                         </button>
                         <button
+                          onClick={() => setReceiptRecord(r)}
                           className="p-1.5 rounded-md hover:bg-muted transition-colors"
                           title="Gerar recibo PDF"
                           style={{ color: 'hsl(var(--primary))' }}
@@ -229,6 +244,19 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
         contractId={contract?.id ?? null}
         rentValue={contract?.rent_value ?? 0}
       />
+
+      {/* Receipt Modal */}
+      {receiptRecord && apartment && currentTenant && (
+        <ReceiptModalDB
+          open={!!receiptRecord}
+          onClose={() => setReceiptRecord(null)}
+          record={receiptRecord}
+          apartment={apartment}
+          tenant={currentTenant}
+          contract={contract ?? null}
+          allRecords={tenantRecords}
+        />
+      )}
     </div>
   );
 }

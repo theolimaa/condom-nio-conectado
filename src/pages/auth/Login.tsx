@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Building2, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,12 +33,12 @@ export default function Login() {
   return (
     <div className="min-h-screen flex" style={{ background: 'hsl(var(--sidebar-background))' }}>
       {/* Left panel */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary">
-            <Building2 className="w-6 h-6 text-primary-foreground" />
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center p-12">
+        <div className="flex items-center gap-3 mb-12">
+          <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-primary">
+            <Home className="w-6 h-6 text-primary-foreground" />
           </div>
-          <span className="text-xl font-bold text-white">ImóvelGest</span>
+          <span className="text-2xl font-bold text-white tracking-tight">Living Gest</span>
         </div>
         <div>
           <h1 className="text-4xl font-bold text-white leading-tight mb-4">
@@ -48,14 +48,6 @@ export default function Login() {
             Controle contratos, pagamentos, inquilinos<br />e documentos em um só lugar.
           </p>
         </div>
-        <div className="flex gap-8">
-          {[{ label: 'Condomínios', value: '∞' }, { label: 'Apartamentos', value: '∞' }, { label: 'Contratos', value: '100%' }].map(s => (
-            <div key={s.label}>
-              <p className="text-2xl font-bold text-white">{s.value}</p>
-              <p className="text-sm" style={{ color: 'hsl(var(--sidebar-foreground))' }}>{s.label}</p>
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* Right panel */}
@@ -64,8 +56,8 @@ export default function Login() {
           <div className="bg-card rounded-2xl shadow-2xl p-8">
             <div className="mb-8">
               <div className="flex items-center gap-2 mb-1 lg:hidden">
-                <Building2 className="w-5 h-5 text-primary" />
-                <span className="font-bold text-primary">ImóvelGest</span>
+                <Home className="w-5 h-5 text-primary" />
+                <span className="font-bold text-primary">Living Gest</span>
               </div>
               <h2 className="text-2xl font-bold">Bem-vindo de volta</h2>
               <p className="text-muted-foreground text-sm mt-1">Faça login para acessar sua conta</p>

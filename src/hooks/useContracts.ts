@@ -37,6 +37,23 @@ export function useContract(tenantId: string) {
   });
 }
 
+export function useContracts() {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['contracts_all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data as ContractDB[];
+    },
+    enabled: !!user,
+  });
+}
+
 export function useUpsertContract() {
   const qc = useQueryClient();
 
@@ -65,6 +82,7 @@ export function useUpsertContract() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['contract', data.tenant_id] });
+      qc.invalidateQueries({ queryKey: ['contracts_all'] });
       toast.success('Contrato salvo!');
     },
     onError: (e: Error) => toast.error(e.message),
@@ -82,7 +100,6 @@ export function useCloseContract() {
         .eq('id', contractId);
       if (error) throw error;
 
-      // Archive tenant to previous_tenants
       const { data: tenant } = await supabase
         .from('tenants')
         .select('*')
@@ -101,14 +118,16 @@ export function useCloseContract() {
           original_id: tenant.id,
           archived_at: new Date().toISOString(),
         });
-        // Delete the tenant (cascades documents/residents)
         await supabase.from('tenants').delete().eq('id', tenantId);
       }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tenants'] });
       qc.invalidateQueries({ queryKey: ['contract'] });
+      qc.invalidateQueries({ queryKey: ['contracts_all'] });
       qc.invalidateQueries({ queryKey: ['previous_tenants'] });
+      qc.invalidateQueries({ queryKey: ['financial_records'] });
+      qc.invalidateQueries({ queryKey: ['financial_records_all'] });
       toast.success('Contrato encerrado! Inquilino movido para histórico.');
     },
     onError: (e: Error) => toast.error(e.message),

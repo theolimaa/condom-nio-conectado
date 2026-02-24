@@ -10,6 +10,7 @@ import Register from "./pages/auth/Register";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import Dashboard from "./pages/Dashboard";
+import Financial from "./pages/Financial";
 import CondominiumDetail from "./pages/CondominiumDetail";
 import ApartmentDetail from "./pages/ApartmentDetail";
 import Profile from "./pages/Profile";
@@ -43,6 +44,7 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/financeiro" element={<ProtectedRoute><Financial /></ProtectedRoute>} />
       <Route path="/condominiums/:id" element={<ProtectedRoute><CondominiumDetail /></ProtectedRoute>} />
       <Route path="/apartments/:id" element={<ProtectedRoute><ApartmentDetail /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
