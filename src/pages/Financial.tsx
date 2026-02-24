@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { TrendingUp, DollarSign, TrendingDown, CheckCircle, XCircle, AlertCircle, Receipt, Loader2 } from 'lucide-react';
+import { TrendingUp, DollarSign, TrendingDown, CheckCircle, AlertCircle, Receipt, Loader2, ArrowUpDown } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { formatCurrency, MONTHS, YEARS } from '@/lib/utils-app';
+import { formatCurrency, MONTHS, YEARS, getPeriodAndDueDate } from '@/lib/utils-app';
 import Layout from '@/components/Layout';
 import { useCondominiums } from '@/hooks/useCondominiums';
 import { useApartments } from '@/hooks/useApartments';
@@ -21,6 +21,9 @@ function getStatus(record: FinancialRecordDB): 'paid' | 'overdue' | 'pending' {
   return 'pending';
 }
 
+type SortField = 'condo' | 'apt' | 'tenant' | 'period' | 'status' | 'payment_date';
+type SortDir = 'asc' | 'desc';
+
 export default function Financial() {
   const { data: condominiums = [] } = useCondominiums();
   const { data: apartments = [] } = useApartments();
@@ -34,6 +37,17 @@ export default function Financial() {
   const [filterCondo, setFilterCondo] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [receiptRecord, setReceiptRecord] = useState<FinancialRecordDB | null>(null);
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  function toggleSort(field: SortField) {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  }
 
   // Build enriched records
   const enriched = financialRecords.map(r => {
@@ -46,7 +60,7 @@ export default function Financial() {
   });
 
   // Apply filters
-  const filtered = enriched.filter(r => {
+  let filtered = enriched.filter(r => {
     const [y, m] = r.month.split('-').map(Number);
     if (y !== Number(filterYear)) return false;
     if (filterMonth !== 'all' && m - 1 !== Number(filterMonth)) return false;
@@ -57,7 +71,29 @@ export default function Financial() {
       if (filterStatus === 'overdue' && r.computedStatus !== 'overdue') return false;
     }
     return true;
-  }).sort((a, b) => a.month.localeCompare(b.month));
+  });
+
+  // Sort
+  if (sortField) {
+    filtered = [...filtered].sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case 'condo': cmp = (a.condo?.name ?? '').localeCompare(b.condo?.name ?? ''); break;
+        case 'apt': cmp = (a.apt?.unit_number ?? '').localeCompare(b.apt?.unit_number ?? '', undefined, { numeric: true }); break;
+        case 'tenant': {
+          const na = a.tenant ? `${a.tenant.first_name} ${a.tenant.last_name}` : '';
+          const nb = b.tenant ? `${b.tenant.first_name} ${b.tenant.last_name}` : '';
+          cmp = na.localeCompare(nb); break;
+        }
+        case 'period': cmp = a.month.localeCompare(b.month); break;
+        case 'status': cmp = a.computedStatus.localeCompare(b.computedStatus); break;
+        case 'payment_date': cmp = (a.payment_date ?? '').localeCompare(b.payment_date ?? ''); break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  } else {
+    filtered.sort((a, b) => a.month.localeCompare(b.month));
+  }
 
   const totalToReceive = filtered.filter(r => !r.paid).reduce((s, r) => s + r.rent_value, 0);
   const totalReceived = filtered.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
@@ -83,10 +119,18 @@ export default function Financial() {
     });
   }
 
-  // For receipt modal
   const receiptApt = receiptRecord ? apartments.find(a => a.id === receiptRecord.apartment_id) : null;
   const receiptTenant = receiptRecord ? allTenants.find(t => t.id === receiptRecord.tenant_id) : null;
   const receiptContract = receiptRecord ? contracts.find(c => c.id === receiptRecord.contract_id) : null;
+
+  function SortHeader({ field, children }: { field: SortField; children: React.ReactNode }) {
+    return (
+      <button className="inline-flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => toggleSort(field)}>
+        {children}
+        <ArrowUpDown className={`w-3 h-3 ${sortField === field ? 'text-primary' : 'text-muted-foreground/50'}`} />
+      </button>
+    );
+  }
 
   return (
     <Layout>
@@ -172,24 +216,22 @@ export default function Financial() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Condomínio</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Apto</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Inquilino</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Período Ref.</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground"><SortHeader field="condo">Condomínio</SortHeader></th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground"><SortHeader field="apt">Apto</SortHeader></th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground"><SortHeader field="tenant">Inquilino</SortHeader></th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground"><SortHeader field="period">Período Ref.</SortHeader></th>
+                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">Vencimento</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Valor</th>
-                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">Status</th>
-                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">Data Pagamento</th>
+                  <th className="text-center px-4 py-3 font-medium text-muted-foreground"><SortHeader field="status">Status</SortHeader></th>
+                  <th className="text-center px-4 py-3 font-medium text-muted-foreground"><SortHeader field="payment_date">Data Pagamento</SortHeader></th>
                   <th className="text-center px-4 py-3 font-medium text-muted-foreground">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(r => {
-                  const [y, m] = r.month.split('-').map(Number);
+                  const contractStartDate = r.contract?.start_date ?? null;
                   const paymentDay = r.contract?.payment_day ?? 1;
-                  const startDay = String(paymentDay).padStart(2, '0');
-                  const nextMonth = m === 12 ? 1 : m + 1;
-                  const nextYear = m === 12 ? y + 1 : y;
-                  const periodLabel = `${startDay}/${String(m).padStart(2, '0')}/${y} a ${startDay}/${String(nextMonth).padStart(2, '0')}/${nextYear}`;
+                  const { periodLabel, dueDateLabel } = getPeriodAndDueDate(r.month, contractStartDate, paymentDay);
 
                   return (
                     <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
@@ -199,6 +241,7 @@ export default function Financial() {
                         {r.tenant ? `${r.tenant.first_name} ${r.tenant.last_name}` : '—'}
                       </td>
                       <td className="px-4 py-3 text-xs">{periodLabel}</td>
+                      <td className="px-4 py-3 text-center text-xs">{dueDateLabel}</td>
                       <td className="px-4 py-3 text-right font-semibold">{formatCurrency(r.rent_value)}</td>
                       <td className="px-4 py-3 text-center">
                         <button onClick={() => togglePaid(r)} className="cursor-pointer">

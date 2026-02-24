@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useApp } from '@/lib/store';
-import { formatCurrency, MONTHS, YEARS } from '@/lib/utils-app';
+import { formatCurrency, MONTHS, YEARS, getPeriodAndDueDate } from '@/lib/utils-app';
 import { useFinancialRecords, useUpsertFinancialRecord, FinancialRecordDB } from '@/hooks/useFinancial';
 import { useContract } from '@/hooks/useContracts';
 import { useTenants } from '@/hooks/useTenants';
@@ -111,14 +111,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
   const totalPending = filteredRecords.filter(r => !r.paid && getStatus(r) === 'pending').reduce((s, r) => s + r.rent_value, 0);
 
   const paymentDay = contract?.payment_day ?? 1;
-
-  function getPeriodLabel(month: string) {
-    const [y, m] = month.split('-').map(Number);
-    const startDay = String(paymentDay).padStart(2, '0');
-    const nextM = m === 12 ? 1 : m + 1;
-    const nextY = m === 12 ? y + 1 : y;
-    return `${startDay}/${String(m).padStart(2, '0')}/${y} a ${startDay}/${String(nextM).padStart(2, '0')}/${nextY}`;
-  }
+  const contractStartDate = contract?.start_date ?? null;
 
   async function togglePaid(record: FinancialRecordDB) {
     const nowPaid = !record.paid;
@@ -186,6 +179,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
             <thead>
               <tr className="bg-muted/50 border-b border-border">
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Período Ref.</th>
+                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Vencimento</th>
                 <th className="text-right px-4 py-3 font-medium text-muted-foreground">Valor</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Pagamento</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Status</th>
@@ -195,9 +189,11 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
             <tbody>
               {filteredRecords.map(r => {
                 const st = getStatus(r);
+                const { periodLabel, dueDateLabel } = getPeriodAndDueDate(r.month, contractStartDate, paymentDay);
                 return (
                   <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium text-xs">{getPeriodLabel(r.month)}</td>
+                    <td className="px-4 py-3 font-medium text-xs">{periodLabel}</td>
+                    <td className="px-4 py-3 text-center text-xs">{dueDateLabel}</td>
                     <td className="px-4 py-3 text-right font-semibold">{formatCurrency(r.rent_value)}</td>
                     <td className="px-4 py-3 text-center text-muted-foreground">
                       {r.payment_date ? r.payment_date : '—'}
