@@ -106,34 +106,60 @@ export function useDeleteTenant() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
-      // Archive to previous_tenants first
-      const { data: tenant } = await supabase
-        .from('tenants')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (tenant) {
-        await supabase.from('previous_tenants').insert({
-          first_name: tenant.first_name,
-          last_name: tenant.last_name,
-          cpf: tenant.cpf,
-          email: tenant.email,
-          phone: tenant.phone,
-          birth_date: tenant.birth_date,
-          apartment_id: tenant.apartment_id,
-          original_id: tenant.id,
-        });
-      }
-
+    mutationFn: async ({ id, apartmentId }: { id: string; apartmentId: string }) => {
+      // Hard delete: remove financial records, contracts, documents, residents, then tenant
+      // Delete financial records for this tenant
+      await supabase.from('financial_records').delete().eq('tenant_id', id);
+      // Delete documents
+      await supabase.from('documents').delete().eq('tenant_id', id);
+      // Delete residents
+      await supabase.from('residents').delete().eq('tenant_id', id);
+      // Delete contracts
+      await supabase.from('contracts').delete().eq('tenant_id', id);
+      // Delete tenant
       const { error } = await supabase.from('tenants').delete().eq('id', id);
+      if (error) throw error;
+      return apartmentId;
+    },
+    onSuccess: (apartmentId) => {
+      qc.invalidateQueries({ queryKey: ['tenants'] });
+      qc.invalidateQueries({ queryKey: ['tenants', apartmentId] });
+      qc.invalidateQueries({ queryKey: ['financial_records'] });
+      qc.invalidateQueries({ queryKey: ['financial_records_all'] });
+      qc.invalidateQueries({ queryKey: ['contracts_all'] });
+      toast.success('Inquilino excluído definitivamente!');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useDeletePreviousTenant() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('previous_tenants').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tenants'] });
       qc.invalidateQueries({ queryKey: ['previous_tenants'] });
-      toast.success('Inquilino excluído!');
+      toast.success('Registro do histórico excluído!');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdatePreviousTenant() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; first_name?: string; last_name?: string; cpf?: string | null; email?: string | null; phone?: string | null }) => {
+      const { error } = await supabase.from('previous_tenants').update(updates).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['previous_tenants'] });
+      toast.success('Dados atualizados!');
     },
     onError: (e: Error) => toast.error(e.message),
   });

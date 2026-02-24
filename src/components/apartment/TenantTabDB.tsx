@@ -178,7 +178,7 @@ export default function TenantTabDB({ tenant, apartmentId }: {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteTenant.mutate(tenant.id)}
+              onClick={() => deleteTenant.mutate({ id: tenant.id, apartmentId })}
               className="bg-destructive hover:bg-destructive/90"
             >
               Excluir Definitivamente

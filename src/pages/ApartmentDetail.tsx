@@ -15,6 +15,7 @@ import TenantTabDB from '@/components/apartment/TenantTabDB';
 import DocumentsTabDB from '@/components/apartment/DocumentsTabDB';
 import ContractTabDB from '@/components/apartment/ContractTabDB';
 import FinancialTabDB from '@/components/apartment/FinancialTabDB';
+import PreviousTenantsTab from '@/components/apartment/PreviousTenantsTab';
 
 function AddTenantModal({ open, onClose, apartmentId }: { open: boolean; onClose: () => void; apartmentId: string }) {
   const addTenant = useAddTenant();
@@ -184,36 +185,7 @@ export default function ApartmentDetail() {
                 />
               </TabsContent>
               <TabsContent value="previous">
-                {previousTenants.length === 0 ? (
-                  <div className="text-center py-10 text-muted-foreground">
-                    <History className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
-                    <p>Nenhum inquilino anterior registrado.</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-border rounded-xl border border-border">
-                    {previousTenants.map(t => (
-                      <div key={t.id} className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-                              <span className="text-sm font-bold text-muted-foreground">{t.first_name.charAt(0)}</span>
-                            </div>
-                            <div>
-                              <p className="font-medium">{t.first_name} {t.last_name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                Arquivado em: {t.archived_at ? formatDate(t.archived_at) : '—'}
-                              </p>
-                              {t.cpf && <p className="text-xs text-muted-foreground">CPF: {t.cpf}</p>}
-                              {t.email && <p className="text-xs text-muted-foreground">Email: {t.email}</p>}
-                              {t.phone && <p className="text-xs text-muted-foreground">Tel: {t.phone}</p>}
-                            </div>
-                          </div>
-                          <span className="badge-closed">Encerrado</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <PreviousTenantsTab previousTenants={previousTenants} apartmentId={apartment.id} />
               </TabsContent>
             </Tabs>
           </div>
@@ -235,34 +207,7 @@ export default function ApartmentDetail() {
                 </div>
               </TabsContent>
               <TabsContent value="previous">
-                {previousTenants.length === 0 ? (
-                  <div className="text-center py-10 text-muted-foreground">
-                    <History className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
-                    <p>Nenhum inquilino anterior registrado.</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-border rounded-xl border border-border">
-                    {previousTenants.map(t => (
-                      <div key={t.id} className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-                              <span className="text-sm font-bold text-muted-foreground">{t.first_name.charAt(0)}</span>
-                            </div>
-                            <div>
-                              <p className="font-medium">{t.first_name} {t.last_name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                Arquivado em: {t.archived_at ? formatDate(t.archived_at) : '—'}
-                              </p>
-                              {t.cpf && <p className="text-xs text-muted-foreground">CPF: {t.cpf}</p>}
-                            </div>
-                          </div>
-                          <span className="badge-closed">Encerrado</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <PreviousTenantsTab previousTenants={previousTenants} apartmentId={apartment.id} />
               </TabsContent>
             </Tabs>
           </div>
