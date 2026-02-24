@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useContract, useUpsertContract, useCloseContract, ContractDB } from '@/hooks/useContracts';
+import { useBulkGeneratePeriods } from '@/hooks/useFinancial';
 import { formatCurrency, formatDate } from '@/lib/utils-app';
 
 export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
@@ -15,6 +16,7 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
   const { data: contract, isLoading } = useContract(tenantId);
   const upsertContract = useUpsertContract();
   const closeContract = useCloseContract();
+  const bulkGenerate = useBulkGeneratePeriods();
 
   const [editing, setEditing] = useState(false);
   const [showClose, setShowClose] = useState(false);
@@ -28,18 +30,29 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
 
   async function handleSave() {
     if (!form.start_date || !form.rent_value) return;
-    await upsertContract.mutateAsync({
+    const result = await upsertContract.mutateAsync({
       id: contract?.id,
       tenant_id: tenantId,
       start_date: form.start_date!,
       end_date: form.end_date ?? null,
       payment_day: form.payment_day ?? null,
-      desired_payment_day: form.desired_payment_day ?? null,
-      desired_payment_date: form.desired_payment_date ?? null,
+      desired_payment_day: null,
+      desired_payment_date: null,
       rent_value: Number(form.rent_value),
       observations: form.observations ?? null,
       status: 'active',
     });
+    // Auto-generate all financial periods from start to 2045
+    if (result?.id) {
+      await bulkGenerate.mutateAsync({
+        apartmentId,
+        tenantId,
+        contractId: result.id,
+        startDate: form.start_date!,
+        rentValue: Number(form.rent_value),
+        paymentDay: form.payment_day ?? 1,
+      });
+    }
     setEditing(false);
   }
 
@@ -77,10 +90,6 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
           <div>
             <Label>Valor do Aluguel *</Label>
             <Input className="mt-1" type="number" step="0.01" placeholder="1500.00" value={form.rent_value ?? ''} onChange={e => setForm({ ...form, rent_value: Number(e.target.value) })} />
-          </div>
-          <div>
-            <Label>Data desejada pagamento</Label>
-            <Input className="mt-1" type="date" value={form.desired_payment_date ?? ''} onChange={e => setForm({ ...form, desired_payment_date: e.target.value })} />
           </div>
         </div>
         <div>
@@ -138,12 +147,6 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
           <div className="bg-muted/50 rounded-xl p-4">
             <p className="text-xs text-muted-foreground mb-1">Dia de Vencimento</p>
             <p className="font-semibold">Todo dia {contract.payment_day}</p>
-          </div>
-        )}
-        {contract?.desired_payment_date && (
-          <div className="bg-muted/50 rounded-xl p-4">
-            <p className="text-xs text-muted-foreground mb-1">Data desejada</p>
-            <p className="font-semibold">{formatDate(contract.desired_payment_date)}</p>
           </div>
         )}
       </div>

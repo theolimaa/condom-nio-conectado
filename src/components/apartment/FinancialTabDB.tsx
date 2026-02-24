@@ -1,10 +1,6 @@
 import { useState } from 'react';
-import { CheckCircle, XCircle, AlertCircle, Receipt, Plus, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { CheckCircle, XCircle, AlertCircle, Receipt, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useApp } from '@/lib/store';
 import { formatCurrency, MONTHS, YEARS, getPeriodAndDueDate } from '@/lib/utils-app';
 import { useFinancialRecords, useUpsertFinancialRecord, FinancialRecordDB } from '@/hooks/useFinancial';
@@ -23,61 +19,6 @@ function getStatus(record: FinancialRecordDB): 'paid' | 'overdue' | 'pending' {
   return 'pending';
 }
 
-function AddPeriodModal({ open, onClose, apartmentId, tenantId, contractId, rentValue }: {
-  open: boolean; onClose: () => void;
-  apartmentId: string; tenantId: string;
-  contractId: string | null; rentValue: number;
-}) {
-  const upsert = useUpsertFinancialRecord();
-  const [month, setMonth] = useState('');
-  const [value, setValue] = useState(String(rentValue));
-
-  async function handleSave() {
-    if (!month) return;
-    await upsert.mutateAsync({
-      apartment_id: apartmentId,
-      tenant_id: tenantId,
-      contract_id: contractId,
-      month,
-      rent_value: Number(value),
-      paid: false,
-      payment_date: null,
-      status: 'Pendente',
-      observations: null,
-      receipt_number: null,
-      receipt_generated_at: null,
-    });
-    onClose();
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Adicionar Período</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div>
-            <Label>Mês de referência (AAAA-MM)</Label>
-            <Input className="mt-1" type="month" value={month} onChange={e => setMonth(e.target.value)} />
-          </div>
-          <div>
-            <Label>Valor</Label>
-            <Input className="mt-1" type="number" step="0.01" value={value} onChange={e => setValue(e.target.value)} />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={upsert.isPending}>
-            {upsert.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            Adicionar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tenantCpf }: {
   apartmentId: string;
   tenantId: string;
@@ -93,7 +34,6 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
 
   const [filterYear, setFilterYear] = useState(String(state.selectedYear));
   const [filterMonth, setFilterMonth] = useState<string>('all');
-  const [showAddPeriod, setShowAddPeriod] = useState(false);
   const [receiptRecord, setReceiptRecord] = useState<FinancialRecordDB | null>(null);
 
   const tenantRecords = records.filter(r => r.tenant_id === tenantId);
@@ -126,25 +66,20 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Select value={filterYear} onValueChange={setFilterYear}>
-            <SelectTrigger className="w-24 h-8 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filterMonth} onValueChange={setFilterMonth}>
-            <SelectTrigger className="w-36 h-8 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os meses</SelectItem>
-              {MONTHS.map((m, i) => <SelectItem key={i} value={String(i)}>{m}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <Button size="sm" variant="outline" onClick={() => setShowAddPeriod(true)}>
-          <Plus className="w-4 h-4 mr-2" /> Período
-        </Button>
+      <div className="flex items-center gap-2">
+        <Select value={filterYear} onValueChange={setFilterYear}>
+          <SelectTrigger className="w-24 h-8 text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterMonth} onValueChange={setFilterMonth}>
+          <SelectTrigger className="w-36 h-8 text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os meses</SelectItem>
+            {MONTHS.map((m, i) => <SelectItem key={i} value={String(i)}>{m}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Summary */}
@@ -168,10 +103,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
       ) : filteredRecords.length === 0 ? (
         <div className="text-center py-10 text-muted-foreground">
-          <p>Nenhum período encontrado.</p>
-          <Button size="sm" className="mt-3" onClick={() => setShowAddPeriod(true)}>
-            <Plus className="w-4 h-4 mr-2" /> Adicionar Período
-          </Button>
+          <p>Nenhum período encontrado. Os períodos são gerados automaticamente ao salvar o contrato.</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border">
@@ -231,15 +163,6 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
           </table>
         </div>
       )}
-
-      <AddPeriodModal
-        open={showAddPeriod}
-        onClose={() => setShowAddPeriod(false)}
-        apartmentId={apartmentId}
-        tenantId={tenantId}
-        contractId={contract?.id ?? null}
-        rentValue={contract?.rent_value ?? 0}
-      />
 
       {/* Receipt Modal */}
       {receiptRecord && apartment && currentTenant && (
