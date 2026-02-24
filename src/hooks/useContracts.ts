@@ -96,7 +96,7 @@ export function useCloseContract() {
     mutationFn: async ({ contractId, tenantId, endDate }: { contractId: string; tenantId: string; endDate: string }) => {
       const { error } = await supabase
         .from('contracts')
-        .update({ status: 'closed', end_date: endDate })
+        .update({ status: 'ended', end_date: endDate })
         .eq('id', contractId);
       if (error) throw error;
 
