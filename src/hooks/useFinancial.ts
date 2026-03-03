@@ -23,7 +23,6 @@ export interface FinancialRecordDB {
 
 export function useFinancialRecords(apartmentId: string) {
   const { user } = useAuth();
-
   return useQuery({
     queryKey: ['financial_records', apartmentId],
     queryFn: async () => {
@@ -41,7 +40,6 @@ export function useFinancialRecords(apartmentId: string) {
 
 export function useAllFinancialRecords() {
   const { user } = useAuth();
-
   return useQuery({
     queryKey: ['financial_records_all', user?.id],
     queryFn: async () => {
@@ -58,7 +56,6 @@ export function useAllFinancialRecords() {
 
 export function useUpsertFinancialRecord() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: async (record: Omit<FinancialRecordDB, 'id' | 'created_at' | 'updated_at'> & { id?: string }) => {
       if (record.id) {
@@ -92,7 +89,6 @@ export function useUpsertFinancialRecord() {
 
 export function useDeleteFinancialRecord() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: async ({ id, apartmentId }: { id: string; apartmentId: string }) => {
       const { error } = await supabase.from('financial_records').delete().eq('id', id);
@@ -109,36 +105,59 @@ export function useDeleteFinancialRecord() {
 }
 
 /**
- * Generate ALL monthly financial records from contract start until Dec 2045.
- * Period is tied to the contract start day. Due date uses paymentDay.
- * Uses date-fns for leap year / short month precision.
+ * Ao editar contrato com novo valor de aluguel, atualiza todos os registros
+ * NÃO PAGOS daquele contrato em cascata.
  */
+export function useUpdateUnpaidRentValues() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      contractId,
+      apartmentId,
+      rentValue,
+    }: {
+      contractId: string;
+      apartmentId: string;
+      rentValue: number;
+    }) => {
+      const { error } = await supabase
+        .from('financial_records')
+        .update({ rent_value: rentValue })
+        .eq('contract_id', contractId)
+        .eq('paid', false);
+      if (error) throw error;
+      return apartmentId;
+    },
+    onSuccess: (apartmentId) => {
+      qc.invalidateQueries({ queryKey: ['financial_records', apartmentId] });
+      qc.invalidateQueries({ queryKey: ['financial_records_all'] });
+    },
+    onError: (e: Error) => toast.error(`Erro ao atualizar valores: ${e.message}`),
+  });
+}
+
 export function generateMonthsForContract(
   apartmentId: string,
   tenantId: string,
   contractId: string,
   startDate: string,
   rentValue: number,
-  paymentDay: number,
+  _paymentDay: number,
 ): Omit<FinancialRecordDB, 'id' | 'created_at' | 'updated_at'>[] {
   const records: Omit<FinancialRecordDB, 'id' | 'created_at' | 'updated_at'>[] = [];
   const start = new Date(startDate + 'T12:00:00');
   const endLimit = new Date('2045-12-31T23:59:59');
-
   let i = 0;
   while (true) {
     const periodStart = addMonths(start, i);
     if (periodStart > endLimit) break;
-
     const year = periodStart.getFullYear();
     const month = String(periodStart.getMonth() + 1).padStart(2, '0');
-    const monthStr = `${year}-${month}`;
-
     records.push({
       apartment_id: apartmentId,
       tenant_id: tenantId,
       contract_id: contractId,
-      month: monthStr,
+      month: `${year}-${month}`,
       rent_value: rentValue,
       paid: false,
       payment_date: null,
@@ -147,53 +166,42 @@ export function generateMonthsForContract(
       receipt_number: null,
       receipt_generated_at: null,
     });
-
     i++;
   }
-
   return records;
 }
 
-/** Bulk insert financial periods, skipping months that already exist */
 export function useBulkGeneratePeriods() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: async ({
-      apartmentId, tenantId, contractId, startDate, rentValue, paymentDay
+      apartmentId, tenantId, contractId, startDate, rentValue, paymentDay,
     }: {
       apartmentId: string; tenantId: string; contractId: string;
       startDate: string; rentValue: number; paymentDay: number;
     }) => {
-      // Fetch existing months to avoid duplicates
       const { data: existing } = await supabase
         .from('financial_records')
         .select('month')
         .eq('contract_id', contractId);
 
       const existingMonths = new Set((existing ?? []).map(r => r.month));
-
-      const allRecords = generateMonthsForContract(
-        apartmentId, tenantId, contractId, startDate, rentValue, paymentDay
-      );
-
+      const allRecords = generateMonthsForContract(apartmentId, tenantId, contractId, startDate, rentValue, paymentDay);
       const newRecords = allRecords.filter(r => !existingMonths.has(r.month));
 
       if (newRecords.length === 0) return 0;
 
-      // Insert in batches of 500 to stay within limits
       for (let i = 0; i < newRecords.length; i += 500) {
         const batch = newRecords.slice(i, i + 500);
         const { error } = await supabase.from('financial_records').insert(batch);
         if (error) throw error;
       }
-
       return newRecords.length;
     },
     onSuccess: (count) => {
       qc.invalidateQueries({ queryKey: ['financial_records'] });
       qc.invalidateQueries({ queryKey: ['financial_records_all'] });
-      if (count > 0) toast.success(`${count} períodos financeiros gerados automaticamente!`);
+      if (count > 0) toast.success(`${count} períodos financeiros gerados!`);
     },
     onError: (e: Error) => toast.error(`Erro ao gerar períodos: ${e.message}`),
   });
