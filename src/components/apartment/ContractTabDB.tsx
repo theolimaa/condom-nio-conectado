@@ -3,12 +3,19 @@ import { AlertTriangle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useContract, useUpsertContract, useCloseContract, ContractDB } from '@/hooks/useContracts';
-import { useBulkGeneratePeriods } from '@/hooks/useFinancial';
+import { useBulkGeneratePeriods, useUpdateUnpaidRentValues } from '@/hooks/useFinancial';
 import { formatCurrency, formatDate } from '@/lib/utils-app';
 
-export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
+export default function ContractTabDB({
+  tenantId,
+  apartmentId,
+  tenantName,
+}: {
   tenantId: string;
   apartmentId: string;
   tenantName: string;
@@ -17,6 +24,7 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
   const upsertContract = useUpsertContract();
   const closeContract = useCloseContract();
   const bulkGenerate = useBulkGeneratePeriods();
+  const updateUnpaidValues = useUpdateUnpaidRentValues();
 
   const [editing, setEditing] = useState(false);
   const [showClose, setShowClose] = useState(false);
@@ -42,7 +50,8 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
       observations: form.observations ?? null,
       status: 'active',
     });
-    // Auto-generate all financial periods from start to 2045
+
+    // Gera automaticamente todos os períodos financeiros do contrato
     if (result?.id) {
       await bulkGenerate.mutateAsync({
         apartmentId,
@@ -52,18 +61,39 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
         rentValue: Number(form.rent_value),
         paymentDay: form.payment_day ?? 1,
       });
+
+      // Se foi EDIÇÃO (contrato já existia), atualiza valor dos registros não pagos em cascata
+      if (contract?.id && Number(form.rent_value) !== contract.rent_value) {
+        await updateUnpaidValues.mutateAsync({
+          contractId: result.id,
+          apartmentId,
+          rentValue: Number(form.rent_value),
+        });
+      }
     }
     setEditing(false);
   }
 
   async function handleClose() {
     if (!contract) return;
-    await closeContract.mutateAsync({ contractId: contract.id, tenantId, endDate });
+    await closeContract.mutateAsync({
+      contractId: contract.id,
+      tenantId,
+      apartmentId,   // ← passa apartmentId para invalidação correta
+      endDate,
+    });
     setShowClose(false);
   }
 
-  if (isLoading) return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>;
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-8">
+        <Loader2 className="w-5 h-5 animate-spin text-primary" />
+      </div>
+    );
+  }
 
+  // Sem contrato — mostra botão para adicionar
   if (!contract && !editing) {
     return (
       <div className="text-center py-12">
@@ -74,6 +104,7 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
     );
   }
 
+  // Formulário de edição / criação
   if (editing) {
     return (
       <div className="space-y-5">
@@ -81,25 +112,55 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label>Data de Início *</Label>
-            <Input className="mt-1" type="date" value={form.start_date ?? ''} onChange={e => setForm({ ...form, start_date: e.target.value })} />
+            <Input
+              className="mt-1"
+              type="date"
+              value={form.start_date ?? ''}
+              onChange={e => setForm({ ...form, start_date: e.target.value })}
+            />
           </div>
           <div>
             <Label>Dia de Vencimento</Label>
-            <Input className="mt-1" type="number" min={1} max={31} placeholder="Ex: 15" value={form.payment_day ?? ''} onChange={e => setForm({ ...form, payment_day: Number(e.target.value) })} />
+            <Input
+              className="mt-1"
+              type="number"
+              min={1}
+              max={31}
+              placeholder="Ex: 15"
+              value={form.payment_day ?? ''}
+              onChange={e => setForm({ ...form, payment_day: Number(e.target.value) })}
+            />
           </div>
           <div>
             <Label>Valor do Aluguel *</Label>
-            <Input className="mt-1" type="number" step="0.01" placeholder="1500.00" value={form.rent_value ?? ''} onChange={e => setForm({ ...form, rent_value: Number(e.target.value) })} />
+            <Input
+              className="mt-1"
+              type="number"
+              step="0.01"
+              placeholder="1500.00"
+              value={form.rent_value ?? ''}
+              onChange={e => setForm({ ...form, rent_value: Number(e.target.value) })}
+            />
           </div>
         </div>
         <div>
           <Label>Observações</Label>
-          <Input className="mt-1" value={form.observations ?? ''} onChange={e => setForm({ ...form, observations: e.target.value })} placeholder="Observações do contrato..." />
+          <Input
+            className="mt-1"
+            value={form.observations ?? ''}
+            onChange={e => setForm({ ...form, observations: e.target.value })}
+            placeholder="Observações do contrato..."
+          />
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={upsertContract.isPending}>
-            {upsertContract.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+          <Button
+            onClick={handleSave}
+            disabled={upsertContract.isPending || bulkGenerate.isPending}
+          >
+            {(upsertContract.isPending || bulkGenerate.isPending)
+              ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              : null}
             Salvar Contrato
           </Button>
         </div>
@@ -107,6 +168,7 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
     );
   }
 
+  // Visualização do contrato
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -124,7 +186,9 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
       </div>
 
       <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${contract?.status === 'active' ? 'badge-active' : 'badge-closed'}`}>
-        {contract?.status === 'active' ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+        {contract?.status === 'active'
+          ? <CheckCircle className="w-4 h-4" />
+          : <XCircle className="w-4 h-4" />}
         {contract?.status === 'active' ? 'Ativo' : 'Encerrado'}
       </div>
 
@@ -158,7 +222,7 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
         </div>
       )}
 
-      {/* Close contract dialog */}
+      {/* Dialog de encerramento */}
       <AlertDialog open={showClose} onOpenChange={setShowClose}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -167,17 +231,29 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
               Encerrar Contrato
             </AlertDialogTitle>
             <AlertDialogDescription>
-              O inquilino <strong>{tenantName}</strong> será movido para "Inquilinos Anteriores" junto com seus documentos e histórico.
+              O inquilino <strong>{tenantName}</strong> será movido para "Inquilinos Anteriores".
+              Documentos e dados do contrato serão arquivados no histórico.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="px-4 pb-2">
             <Label>Data de encerramento</Label>
-            <Input className="mt-1" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+            <Input
+              className="mt-1"
+              type="date"
+              value={endDate}
+              onChange={e => setEndDate(e.target.value)}
+            />
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleClose} disabled={closeContract.isPending} className="bg-destructive hover:bg-destructive/90">
-              {closeContract.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            <AlertDialogAction
+              onClick={handleClose}
+              disabled={closeContract.isPending}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {closeContract.isPending
+                ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                : null}
               Encerrar Contrato
             </AlertDialogAction>
           </AlertDialogFooter>
