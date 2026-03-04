@@ -410,7 +410,7 @@ export default function Dashboard() {
                         onClick={() => navigate(`/condominiums/${cond.id}`)}
                         className="text-sm text-primary font-medium hover:underline flex items-center gap-1"
                       >
-                        Ver apartamentos ->
+                        Ver apartamentos {'>'}
                       </button>
                     </div>
                   </div>
