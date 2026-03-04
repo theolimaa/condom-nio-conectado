@@ -20,10 +20,7 @@ function getStatus(record: FinancialRecordDB, paymentDay?: number | null): 'paid
 }
 
 export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tenantCpf }: {
-  apartmentId: string;
-  tenantId: string;
-  tenantName: string;
-  tenantCpf: string;
+  apartmentId: string; tenantId: string; tenantName: string; tenantCpf: string;
 }) {
   const { state } = useApp();
   const { data: records = [], isLoading } = useFinancialRecords(apartmentId);
@@ -33,7 +30,6 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
   const condominiumName = apartment ? (condominiums.find(c => c.id === apartment.condominium_id)?.name ?? '') : '';
   const { data: tenants = [] } = useTenants(apartmentId);
   const upsert = useUpsertFinancialRecord();
-
   const [filterYear, setFilterYear] = useState(String(state.selectedYear));
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [receiptRecord, setReceiptRecord] = useState<FinancialRecordDB | null>(null);
@@ -49,28 +45,20 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
     return matchYear && matchMonth;
   }).sort((a, b) => a.month.localeCompare(b.month));
 
-  const totalPaid = filteredRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
-  const totalOverdue = filteredRecords.filter(r => getStatus(r) === 'overdue').reduce((s, r) => s + r.rent_value, 0);
-  const totalPending = filteredRecords.filter(r => !r.paid && getStatus(r) === 'pending').reduce((s, r) => s + r.rent_value, 0);
-
+  // FIX: declarar paymentDay ANTES dos totais para que getStatus receba o valor correto
   const paymentDay = contract?.payment_day ?? 1;
   const contractStartDate = contract?.start_date ?? null;
 
+  // FIX: passar paymentDay em todos os getStatus dos totais
+  const totalPaid = filteredRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
+  const totalOverdue = filteredRecords.filter(r => getStatus(r, paymentDay) === 'overdue').reduce((s, r) => s + r.rent_value, 0);
+  const totalPending = filteredRecords.filter(r => !r.paid && getStatus(r, paymentDay) === 'pending').reduce((s, r) => s + r.rent_value, 0);
+
   async function togglePaid(record: FinancialRecordDB) {
     if (!record.paid) {
-      // Abrir modal para confirmar a data de pagamento
-      setPaymentModal({
-        record,
-        date: new Date().toISOString().split('T')[0],
-      });
+      setPaymentModal({ record, date: new Date().toISOString().split('T')[0] });
     } else {
-      // Desmarcar pagamento diretamente
-      await upsert.mutateAsync({
-        ...record,
-        paid: false,
-        payment_date: null,
-        status: 'Pendente',
-      });
+      await upsert.mutateAsync({ ...record, paid: false, payment_date: null, status: 'Pendente' });
     }
   }
 
@@ -150,7 +138,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
                     <td className="px-4 py-3 text-center text-xs">{dueDateLabel}</td>
                     <td className="px-4 py-3 text-right font-semibold">{formatCurrency(r.rent_value)}</td>
                     <td className="px-4 py-3 text-center text-muted-foreground">
-                      {r.payment_date ? r.payment_date : '—'}
+                      {r.payment_date ? r.payment_date : '-'}
                     </td>
                     <td className="px-4 py-3 text-center">
                       {st === 'paid' && <span className="badge-paid"><CheckCircle className="w-3 h-3" /> Pago</span>}
@@ -227,7 +215,9 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
           <DialogFooter>
             <Button variant="outline" onClick={() => setPaymentModal(null)}>Cancelar</Button>
             <Button onClick={confirmPayment} disabled={upsert.isPending}>
-              {upsert.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+              {upsert.isPending
+                ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                : <CheckCircle className="w-4 h-4 mr-2" />}
               Confirmar Pagamento
             </Button>
           </DialogFooter>
