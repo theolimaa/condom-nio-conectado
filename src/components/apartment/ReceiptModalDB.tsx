@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { FileText, Download, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FileText, Download, X, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { formatCurrency, formatDate } from '@/lib/utils-app';
 import { FinancialRecordDB } from '@/hooks/useFinancial';
 import { ApartmentDB } from '@/hooks/useApartments';
@@ -20,6 +21,51 @@ interface Props {
   contract: ContractDB | null;
   allRecords: FinancialRecordDB[];
   condominiumName: string;
+}
+
+
+// Campo de texto editável inline
+function EditableText({ value, onChange, multiline = false, className = '' }: {
+  value: string;
+  onChange: (v: string) => void;
+  multiline?: boolean;
+  className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    if (multiline) {
+      return (
+        <Textarea
+          autoFocus
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onBlur={() => setEditing(false)}
+          className={`text-sm font-mono min-h-[60px] ${className}`}
+        />
+      );
+    }
+    return (
+      <Input
+        autoFocus
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onBlur={() => setEditing(false)}
+        className={`h-7 text-sm font-mono ${className}`}
+      />
+    );
+  }
+
+  return (
+    <span
+      className={`group relative cursor-pointer hover:bg-primary/10 rounded px-1 -mx-1 transition-colors ${className}`}
+      onClick={() => setEditing(true)}
+      title="Clique para editar"
+    >
+      {value}
+      <Pencil className="inline w-3 h-3 ml-1 opacity-0 group-hover:opacity-40 transition-opacity" />
+    </span>
+  );
 }
 
 export default function ReceiptModalDB({ open, onClose, record, apartment, tenant, contract, allRecords, condominiumName }: Props) {
@@ -48,6 +94,29 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
   }
 
   const receiptCode = generateReceiptCode();
+
+  // Caução
+  const cautionText = contract?.caution_paid && contract.caution_value
+    ? `Caução paga no valor de ${formatCurrency(contract.caution_value)}${contract.caution_date ? ` na data ${formatDate(contract.caution_date)}` : ''}.`
+    : '';
+
+  // Textos editáveis
+  const [title, setTitle] = useState('');
+  const [mainText, setMainText] = useState('');
+  const [cautionLine, setCautionLine] = useState('');
+  const [historyTitle, setHistoryTitle] = useState('');
+  const [footer, setFooter] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    const periodLabel = getPeriodLabel(record.month);
+    const rentFormatted = formatCurrency(editableValues[record.id] ?? record.rent_value);
+    setTitle(`RECIBO — APTO ${apartment.unit_number} — ${tenant.first_name} ${tenant.last_name} — ${today}`);
+    setMainText(`Recebi de ${tenant.first_name} ${tenant.last_name}, CPF ${tenant.cpf || '—'} a importância de: ${rentFormatted} referente ao aluguel para o período de ${periodLabel}.`);
+    setCautionLine(cautionText);
+    setHistoryTitle(`Histórico do Ano ${recYear}`);
+    setFooter(`Fortaleza, ${today} — ${adminName} — Confira seu recibo.`);
+  }, [open]);
 
   const [recYear] = record.month.split('-').map(Number);
   const yearRecords = allRecords
@@ -87,19 +156,21 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
     };
 
     addText(receiptCode, 11, true);
-    addText(`RECIBO — APTO ${apartment.unit_number} — ${tenant.first_name} ${tenant.last_name} — ${today}`, 11, true);
+    addText(title, 11, true);
     addLine();
     y += 2;
 
-    const periodLabel = getPeriodLabel(record.month);
-    addText(
-      `Recebi de ${tenant.first_name} ${tenant.last_name}, CPF ${tenant.cpf || '—'} a importância de: ${formatCurrency(editableValues[record.id] ?? record.rent_value)} referente ao aluguel para o período de ${periodLabel}.`,
-      10
-    );
+    addText(mainText, 10);
+
+    if (cautionLine) {
+      y += 2;
+      addText(cautionLine, 10);
+    }
+
     y += 4;
     addLine();
 
-    addText('HISTÓRICO DO ANO', 11, true);
+    addText(historyTitle, 11, true);
     y += 2;
 
     const cols = { periodo: 20, valor: 90, pagamento: 115, pago: 145, devendo: 170 };
@@ -140,7 +211,7 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
     addLine();
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Fortaleza, ${today} — ${adminName} — Confira seu recibo.`, ml, y);
+    doc.text(footer, ml, y);
 
     doc.save(`Recibo-${receiptCode}.pdf`);
   }
@@ -156,21 +227,31 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
         </DialogHeader>
 
         <div className="bg-muted/30 border border-border rounded-xl p-6 space-y-4 font-mono text-sm">
+          <p className="text-xs text-muted-foreground flex items-center gap-1 -mb-2">
+            <Pencil className="w-3 h-3" /> Clique em qualquer texto para editar antes de baixar.
+          </p>
           <div className="border-b border-border pb-3 space-y-0.5">
             <p className="font-bold text-lg tracking-widest">{receiptCode}</p>
             <p className="font-bold text-base">
-              RECIBO — APTO {apartment.unit_number} — {tenant.first_name} {tenant.last_name} — {today}
+              <EditableText value={title} onChange={setTitle} />
             </p>
           </div>
 
-          <p>
-            Recebi de <strong>{tenant.first_name} {tenant.last_name}</strong>, CPF {tenant.cpf || '—'}{' '}
-            a importância de: <strong>{formatCurrency(editableValues[record.id] ?? record.rent_value)}</strong> referente ao aluguel para o período de{' '}
-            <strong>{getPeriodLabel(record.month)}</strong>.
-          </p>
+          <div>
+            <EditableText value={mainText} onChange={setMainText} multiline className="w-full" />
+          </div>
+
+          {/* Caução */}
+          {(cautionLine || contract?.caution_paid) && (
+            <div className="text-sm">
+              <EditableText value={cautionLine} onChange={setCautionLine} multiline className="w-full" />
+            </div>
+          )}
 
           <div>
-            <p className="font-bold mb-2 border-b border-border pb-1">Histórico do Ano {recYear}</p>
+            <p className="font-bold mb-2 border-b border-border pb-1">
+              <EditableText value={historyTitle} onChange={setHistoryTitle} />
+            </p>
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-muted-foreground">
@@ -221,7 +302,7 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
           </div>
 
           <div className="border-t border-border pt-3 text-xs text-muted-foreground">
-            Fortaleza, {today} — {adminName} — Confira seu recibo.
+            <EditableText value={footer} onChange={setFooter} className="w-full" />
           </div>
         </div>
 
