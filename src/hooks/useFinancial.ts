@@ -30,8 +30,7 @@ export function useFinancialRecords(apartmentId: string) {
         .from('financial_records')
         .select('*')
         .eq('apartment_id', apartmentId)
-        .order('month', { ascending: true })
-        .limit(10000);
+        .order('month', { ascending: true });
       if (error) throw error;
       return data as FinancialRecordDB[];
     },
@@ -41,8 +40,7 @@ export function useFinancialRecords(apartmentId: string) {
 
 /**
  * Busca registros financeiros de UM ANO ESPECÍFICO.
- * Resolve o problema de limite do Supabase: em vez de buscar todos os
- * 6000+ registros de uma vez, busca apenas os ~400 do ano selecionado.
+ * Evita o limite do Supabase buscando ~400 registros em vez de 6000+.
  */
 export function useFinancialRecordsByYear(year: number) {
   const { user } = useAuth();
@@ -62,11 +60,6 @@ export function useFinancialRecordsByYear(year: number) {
   });
 }
 
-/**
- * Hook legado — mantido para compatibilidade com Financial.tsx
- * Usa limit alto para tentar pegar tudo, mas prefira useFinancialRecordsByYear
- * para o Dashboard.
- */
 export function useAllFinancialRecords() {
   const { user } = useAuth();
   return useQuery({
@@ -192,6 +185,11 @@ export function generateMonthsForContract(
   return records;
 }
 
+/**
+ * Gera períodos financeiros mensais até Dez/2045.
+ * CORREÇÃO: checa meses existentes por apartment_id (não só contract_id)
+ * para evitar duplicatas quando o registro pago tem contract_id diferente/nulo.
+ */
 export function useBulkGeneratePeriods() {
   const qc = useQueryClient();
   return useMutation({
@@ -201,14 +199,20 @@ export function useBulkGeneratePeriods() {
       apartmentId: string; tenantId: string; contractId: string;
       startDate: string; rentValue: number; paymentDay: number;
     }) => {
+      // ✅ CORREÇÃO: busca por apartment_id para pegar TODOS os registros do apto,
+      // incluindo os que têm contract_id nulo ou de contrato anterior
       const { data: existing } = await supabase
         .from('financial_records')
         .select('month')
-        .eq('contract_id', contractId)
-        .limit(10000);
+        .eq('apartment_id', apartmentId);
 
       const existingMonths = new Set((existing ?? []).map(r => r.month));
-      const allRecords = generateMonthsForContract(apartmentId, tenantId, contractId, startDate, rentValue, paymentDay);
+
+      const allRecords = generateMonthsForContract(
+        apartmentId, tenantId, contractId, startDate, rentValue, paymentDay
+      );
+
+      // Só insere meses que não existem de forma alguma para este apartamento
       const newRecords = allRecords.filter(r => !existingMonths.has(r.month));
 
       if (newRecords.length === 0) return 0;
@@ -224,7 +228,7 @@ export function useBulkGeneratePeriods() {
       qc.invalidateQueries({ queryKey: ['financial_records'] });
       qc.invalidateQueries({ queryKey: ['financial_records_year'] });
       qc.invalidateQueries({ queryKey: ['financial_records_all'] });
-      if (count > 0) toast.success(`${count} períodos financeiros gerados!`);
+      if (count && count > 0) toast.success(`${count} períodos financeiros gerados!`);
     },
     onError: (e: Error) => toast.error(`Erro ao gerar períodos: ${e.message}`),
   });
