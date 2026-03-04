@@ -185,7 +185,7 @@ export default function MonthlyReport() {
   return (
     <Layout>
       <div className="p-4 md:p-6 space-y-4 md:space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <FileBarChart2 className="w-6 h-6 text-primary" />
@@ -249,7 +249,7 @@ export default function MonthlyReport() {
                     {g.totalOverdue > 0 && <span style={{ color: 'hsl(var(--overdue))' }}>{formatCurrency(g.totalOverdue)} inad.</span>}
                   </div>
                 </div>
-                <table className="w-full text-sm">
+                <table className="w-full text-xs sm:text-sm">
                   <thead>
                     <tr className="text-xs text-muted-foreground border-b border-border">
                       <th className="text-left px-4 py-2">Apto</th>
