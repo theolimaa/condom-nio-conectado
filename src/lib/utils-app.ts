@@ -64,10 +64,11 @@ export function getPeriodAndDueDate(monthStr: string, contractStartDate: string 
   
   const periodLabel = `${String(periodStartDay).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y} a ${String(periodEndDay).padStart(2, '0')}/${String(nextM).padStart(2, '0')}/${nextY}`;
   
-  // Due date: paymentDay of the current month (adjusted for month length)
-  const adjustedDueDay = Math.min(paymentDay, daysInMonth(y, m));
-  const dueDateStr = `${y}-${String(m).padStart(2, '0')}-${String(adjustedDueDay).padStart(2, '0')}`;
-  const dueDateLabel = `${String(adjustedDueDay).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
+  // Due date: paymentDay of the NEXT month (end of the period)
+  // e.g. period 16/01 → 16/02: due on 16/02
+  const adjustedDueDay = Math.min(paymentDay, daysInMonth(nextY, nextM));
+  const dueDateStr = `${nextY}-${String(nextM).padStart(2, '0')}-${String(adjustedDueDay).padStart(2, '0')}`;
+  const dueDateLabel = `${String(adjustedDueDay).padStart(2, '0')}/${String(nextM).padStart(2, '0')}/${nextY}`;
   
   return { periodLabel, dueDateStr, dueDateLabel };
 }
