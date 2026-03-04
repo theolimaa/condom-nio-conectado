@@ -130,14 +130,14 @@ export default function Financial() {
 
   return (
     <Layout>
-      <div className="p-6 space-y-6">
+      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Financeiro</h1>
+          <h1 className="text-xl md:text-2xl font-bold">Financeiro</h1>
           <p className="text-muted-foreground text-sm">Painel de controle de recebimentos</p>
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
           <div className="stat-card">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">Total a Receber</p>
@@ -145,7 +145,7 @@ export default function Financial() {
                 <DollarSign className="w-4 h-4" style={{ color: 'hsl(var(--warning))' }} />
               </div>
             </div>
-            <p className="text-2xl font-bold" style={{ color: 'hsl(var(--warning))' }}>{formatCurrency(totalToReceive)}</p>
+            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--warning))' }}>{formatCurrency(totalToReceive)}</p>
           </div>
           <div className="stat-card">
             <div className="flex items-center justify-between mb-3">
@@ -154,7 +154,7 @@ export default function Financial() {
                 <TrendingUp className="w-4 h-4" style={{ color: 'hsl(var(--paid))' }} />
               </div>
             </div>
-            <p className="text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(totalReceived)}</p>
+            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(totalReceived)}</p>
           </div>
           <div className="stat-card">
             <div className="flex items-center justify-between mb-3">
@@ -163,12 +163,12 @@ export default function Financial() {
                 <TrendingDown className="w-4 h-4" style={{ color: 'hsl(var(--overdue))' }} />
               </div>
             </div>
-            <p className="text-2xl font-bold" style={{ color: 'hsl(var(--overdue))' }}>{formatCurrency(totalOverdue)}</p>
+            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--overdue))' }}>{formatCurrency(totalOverdue)}</p>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
           <Select value={filterYear} onValueChange={setFilterYear}>
             <SelectTrigger className="w-24 h-9 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
