@@ -114,7 +114,7 @@ export default function ApartmentDetail() {
 
   return (
     <Layout>
-      <div className="p-6 space-y-5">
+      <div className="p-4 md:p-6 space-y-4 md:space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -158,10 +158,10 @@ export default function ApartmentDetail() {
             <Tabs value={activeTab} onValueChange={setActiveTab} className="p-4">
               <TabsList className="mb-4">
                 <TabsTrigger value="tenant">Inquilino</TabsTrigger>
-                <TabsTrigger value="documents">Documentos</TabsTrigger>
+                <TabsTrigger value="documents"><span className="hidden sm:inline">Documentos</span><span className="sm:hidden">Docs</span></TabsTrigger>
                 <TabsTrigger value="contract">Contrato</TabsTrigger>
-                <TabsTrigger value="financial">Financeiro</TabsTrigger>
-                <TabsTrigger value="previous">Anteriores</TabsTrigger>
+                <TabsTrigger value="financial"><span className="hidden sm:inline">Financeiro</span><span className="sm:hidden">Fin.</span></TabsTrigger>
+                <TabsTrigger value="previous"><span className="hidden sm:inline">Anteriores</span><span className="sm:hidden">Ant.</span></TabsTrigger>
               </TabsList>
               <TabsContent value="tenant">
                 <TenantTabDB tenant={currentTenant} apartmentId={apartment.id} />
@@ -194,7 +194,7 @@ export default function ApartmentDetail() {
             <Tabs value={activeTab} onValueChange={setActiveTab} className="p-4">
               <TabsList className="mb-4">
                 <TabsTrigger value="tenant" disabled>Inquilino</TabsTrigger>
-                <TabsTrigger value="previous">Anteriores</TabsTrigger>
+                <TabsTrigger value="previous"><span className="hidden sm:inline">Anteriores</span><span className="sm:hidden">Ant.</span></TabsTrigger>
               </TabsList>
               <TabsContent value="tenant">
                 <div className="bg-card rounded-xl border border-dashed border-border p-12 text-center">
