@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Receipt, Loader2, CalendarDays } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -7,14 +7,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { useApp } from '@/lib/store';
 import { formatCurrency, MONTHS, YEARS, getPeriodAndDueDate, getRecordStatus } from '@/lib/utils-app';
-import { useFinancialRecords, useUpsertFinancialRecord, useDeleteFinancialRecord, FinancialRecordDB } from '@/hooks/useFinancial';
+import { useFinancialRecords, useUpsertFinancialRecord, FinancialRecordDB } from '@/hooks/useFinancial';
 import { useContract } from '@/hooks/useContracts';
 import { useTenants } from '@/hooks/useTenants';
 import { useApartment } from '@/hooks/useApartments';
 import { useCondominiums } from '@/hooks/useCondominiums';
 import ReceiptModalDB from './ReceiptModalDB';
-import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 
 function getStatus(record: FinancialRecordDB, paymentDay?: number | null): 'paid' | 'overdue' | 'pending' {
   if (record.paid) return 'paid';
@@ -25,7 +23,6 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
   apartmentId: string; tenantId: string; tenantName: string; tenantCpf: string;
 }) {
   const { state } = useApp();
-  const qc = useQueryClient();
   const { data: records = [], isLoading } = useFinancialRecords(apartmentId);
   const { data: contract } = useContract(tenantId);
   const { data: apartment } = useApartment(apartmentId);
@@ -33,77 +30,34 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
   const condominiumName = apartment ? (condominiums.find(c => c.id === apartment.condominium_id)?.name ?? '') : '';
   const { data: tenants = [] } = useTenants(apartmentId);
   const upsert = useUpsertFinancialRecord();
-  const deleteRecord = useDeleteFinancialRecord();
   const [filterYear, setFilterYear] = useState(String(state.selectedYear));
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [receiptRecord, setReceiptRecord] = useState<FinancialRecordDB | null>(null);
   const [paymentModal, setPaymentModal] = useState<{ record: FinancialRecordDB; date: string } | null>(null);
 
-  // Auto-deletar duplicatas do banco ao carregar
-  useEffect(() => {
-    if (records.length === 0) return;
-
-    // Agrupar todos registros do apartamento por month (normalizado)
-    const byMonth = new Map<string, FinancialRecordDB[]>();
-    for (const r of records) {
-      const key = r.month.trim();
-      if (!byMonth.has(key)) byMonth.set(key, []);
-      byMonth.get(key)!.push(r);
-    }
-
-    // Para cada month com duplicatas, manter o pago ou o mais antigo e deletar os outros
-    const toDelete: string[] = [];
-    byMonth.forEach((group) => {
-      if (group.length <= 1) return;
-      // Ordenar: pago primeiro, depois por created_at mais antigo
-      const sorted = [...group].sort((a, b) => {
-        if (a.paid && !b.paid) return -1;
-        if (!a.paid && b.paid) return 1;
-        const ta = a.created_at ?? '';
-        const tb = b.created_at ?? '';
-        return ta.localeCompare(tb);
-      });
-      // Manter o primeiro (sorted[0]), deletar os outros
-      for (let i = 1; i < sorted.length; i++) {
-        toDelete.push(sorted[i].id);
-      }
-    });
-
-    if (toDelete.length === 0) return;
-
-    // Deletar os duplicados silenciosamente
-    (async () => {
-      for (const id of toDelete) {
-        await supabase.from('financial_records').delete().eq('id', id);
-      }
-      qc.invalidateQueries({ queryKey: ['financial_records', apartmentId] });
-      qc.invalidateQueries({ queryKey: ['financial_records_year'] });
-      qc.invalidateQueries({ queryKey: ['financial_records_all'] });
-    })();
-  }, [records.length, apartmentId]);
+  const paymentDay = contract?.payment_day ?? 1;
+  const contractStartDate = contract?.start_date ?? null;
 
   const tenantRecords = records.filter(r => r.tenant_id === tenantId);
   const currentTenant = tenants.find(t => t.id === tenantId);
 
+  // Filtrar e ordenar
   const filteredRecords = tenantRecords.filter(r => {
+    // Ignorar registros com formato antigo de month (ex: "2026-01-03_2026-02-03")
+    if (r.month.includes('_') || r.month.length > 7) return false;
     const [y, m] = r.month.split('-').map(Number);
     const matchYear = y === Number(filterYear);
     const matchMonth = filterMonth === 'all' || m - 1 === Number(filterMonth);
     return matchYear && matchMonth;
   }).sort((a, b) => a.month.localeCompare(b.month));
 
-  // Dedup defensivo por month (para garantir mesmo enquanto o useEffect processa)
+  // Dedup defensivo por month
   const seen = new Map<string, FinancialRecordDB>();
   for (const r of filteredRecords) {
-    const key = r.month.trim();
-    const existing = seen.get(key);
-    if (!existing || r.paid) seen.set(key, r);
+    const existing = seen.get(r.month);
+    if (!existing || r.paid) seen.set(r.month, r);
   }
   const dedupedRecords = Array.from(seen.values()).sort((a, b) => a.month.localeCompare(b.month));
-
-  // paymentDay ANTES dos totais
-  const paymentDay = contract?.payment_day ?? 1;
-  const contractStartDate = contract?.start_date ?? null;
 
   const totalPaid = dedupedRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
   const totalOverdue = dedupedRecords.filter(r => getStatus(r, paymentDay) === 'overdue').reduce((s, r) => s + r.rent_value, 0);
