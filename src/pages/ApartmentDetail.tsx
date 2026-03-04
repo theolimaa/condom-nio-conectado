@@ -104,7 +104,7 @@ export default function ApartmentDetail() {
   if (!apartment) {
     return (
       <Layout>
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           <p className="text-muted-foreground">Apartamento não encontrado.</p>
           <Button variant="outline" className="mt-4" onClick={() => navigate(-1)}>Voltar</Button>
         </div>
@@ -126,7 +126,7 @@ export default function ApartmentDetail() {
             </button>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold">Apartamento {apartment.unit_number}</h1>
+                <h1 className="text-lg md:text-2xl font-bold">Apto {apartment.unit_number}</h1>
                 {currentTenant ? (
                   <span className="badge-active flex items-center gap-1"><UserCheck className="w-3 h-3" /> Ocupado</span>
                 ) : (
