@@ -19,11 +19,35 @@ interface Props {
   tenant: TenantDB;
   contract: ContractDB | null;
   allRecords: FinancialRecordDB[];
+  condominiumName: string;
 }
 
-export default function ReceiptModalDB({ open, onClose, record, apartment, tenant, contract, allRecords }: Props) {
+export default function ReceiptModalDB({ open, onClose, record, apartment, tenant, contract, allRecords, condominiumName }: Props) {
   const { user } = useAuth();
   const [editableValues, setEditableValues] = useState<Record<string, number>>({});
+
+  // Gera código único do recibo: SIGLA + numAntes + AP + numDepois + DDMMAAAA
+  function generateReceiptCode(): string {
+    const sigla = condominiumName
+      .split(/\s+/)
+      .map(w => w[0]?.toUpperCase() ?? '')
+      .join('');
+    const parts = apartment.unit_number.split('-');
+    const numIndicativo = parts.length >= 2 ? parts[0] : '';
+    const apNum = parts.length >= 2
+      ? parts[1].padStart(2, '0')
+      : apartment.unit_number.padStart(2, '0');
+    let dateStr = '';
+    if (contract?.start_date) {
+      const d = new Date(contract.start_date + 'T12:00:00');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      dateStr = `${dd}${mm}${d.getFullYear()}`;
+    }
+    return `${sigla}${numIndicativo}AP${apNum}${dateStr}`;
+  }
+
+  const receiptCode = generateReceiptCode();
 
   const [recYear] = record.month.split('-').map(Number);
   const yearRecords = allRecords
@@ -62,7 +86,8 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
       y += 4;
     };
 
-    addText(`RECIBO — APTO ${apartment.unit_number} — ${tenant.first_name} ${tenant.last_name} — ${today}`, 13, true);
+    addText(receiptCode, 11, true);
+    addText(`RECIBO — APTO ${apartment.unit_number} — ${tenant.first_name} ${tenant.last_name} — ${today}`, 11, true);
     addLine();
     y += 2;
 
@@ -117,7 +142,7 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
     doc.setFont('helvetica', 'normal');
     doc.text(`Fortaleza, ${today} — ${adminName} — Confira seu recibo.`, ml, y);
 
-    doc.save(`Recibo-Apto${apartment.unit_number}-${record.month}.pdf`);
+    doc.save(`Recibo-${receiptCode}.pdf`);
   }
 
   return (
@@ -131,7 +156,8 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
         </DialogHeader>
 
         <div className="bg-muted/30 border border-border rounded-xl p-6 space-y-4 font-mono text-sm">
-          <div className="border-b border-border pb-3">
+          <div className="border-b border-border pb-3 space-y-0.5">
+            <p className="font-bold text-lg tracking-widest">{receiptCode}</p>
             <p className="font-bold text-base">
               RECIBO — APTO {apartment.unit_number} — {tenant.first_name} {tenant.last_name} — {today}
             </p>
