@@ -184,7 +184,7 @@ export default function MonthlyReport() {
 
   return (
     <Layout>
-      <div className="p-6 space-y-6">
+      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -219,7 +219,7 @@ export default function MonthlyReport() {
         </div>
 
         {/* Resumo */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="stat-card">
             <p className="text-sm text-muted-foreground">Recebido</p>
             <p className="text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(grandPaid)}</p>
@@ -240,7 +240,7 @@ export default function MonthlyReport() {
         ) : (
           <div className="space-y-6">
             {grouped.map(g => (
-              <div key={g.condo.id} className="bg-card border border-border rounded-xl overflow-hidden">
+              <div key={g.condo.id} className="bg-card border border-border rounded-xl overflow-x-auto">
                 <div className="flex items-center justify-between px-5 py-3 bg-muted/40 border-b border-border">
                   <h2 className="font-semibold">{g.condo.name}</h2>
                   <div className="flex gap-4 text-sm">
