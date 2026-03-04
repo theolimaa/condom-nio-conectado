@@ -3,7 +3,7 @@ import {
   LayoutDashboard, LogOut, User, ChevronRight, Menu, X, Home, Wallet,
   FileBarChart2, DoorOpen, ChevronDown, ChevronUp
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 
 const navItems = [
@@ -25,9 +25,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [financeiroOpen, setFinanceiroOpen] = useState(
     location.pathname.startsWith('/financeiro')
   );
+
+  // Fecha menu mobile ao navegar
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  // Sidebar colapsa automaticamente em telas pequenas
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) setSidebarOpen(false);
+      else setSidebarOpen(true);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   async function handleLogout() {
     await signOut();
@@ -37,26 +54,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const userName = user?.user_metadata?.username || user?.email?.split('@')[0] || 'Usuário';
   const userEmail = user?.email || '';
 
-  return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Sidebar */}
-      <aside
-        className="flex flex-col transition-all duration-300 shrink-0"
-        style={{
-          width: sidebarOpen ? '240px' : '68px',
-          background: 'hsl(var(--sidebar-background))',
-        }}
-      >
+  // Sidebar content reutilizado no desktop e no drawer mobile
+  function SidebarContent({ mobile = false }: { mobile?: boolean }) {
+    return (
+      <>
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
           <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary shrink-0">
             <Home className="w-5 h-5 text-primary-foreground" />
           </div>
-          {sidebarOpen && (
-            <div>
-              <p className="text-sm font-bold text-sidebar-accent-foreground leading-tight">Living Gest</p>
-              <p className="text-xs" style={{ color: 'hsl(var(--sidebar-foreground))' }}>Gestão de Imóveis</p>
-            </div>
+          <div>
+            <p className="text-sm font-bold text-sidebar-accent-foreground leading-tight">Living Gest</p>
+            <p className="text-xs" style={{ color: 'hsl(var(--sidebar-foreground))' }}>Gestão de Imóveis</p>
+          </div>
+          {mobile && (
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="ml-auto p-1 rounded-md hover:bg-muted"
+            >
+              <X className="w-5 h-5" />
+            </button>
           )}
         </div>
 
@@ -64,14 +81,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = location.pathname.startsWith(item.path);
-
             if (item.children) {
               return (
                 <div key={item.path}>
-                  {/* Item pai com toggle */}
                   <button
                     onClick={() => {
-                      if (!sidebarOpen) {
+                      if (!mobile && !sidebarOpen) {
                         setSidebarOpen(true);
                         setFinanceiroOpen(true);
                       } else {
@@ -79,10 +94,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       }
                     }}
                     className={`sidebar-nav-item w-full text-left ${isActive ? 'active' : ''}`}
-                    title={!sidebarOpen ? item.label : undefined}
                   >
                     <item.icon className="w-5 h-5 shrink-0" />
-                    {sidebarOpen && (
+                    {(mobile || sidebarOpen) && (
                       <>
                         <span className="flex-1">{item.label}</span>
                         {financeiroOpen
@@ -92,9 +106,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       </>
                     )}
                   </button>
-
-                  {/* Subitens */}
-                  {sidebarOpen && financeiroOpen && (
+                  {(mobile || sidebarOpen) && financeiroOpen && (
                     <div className="ml-3 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
                       {item.children.map(child => {
                         const childActive = location.pathname === child.path;
@@ -115,17 +127,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </div>
               );
             }
-
             return (
               <Link
                 key={item.path}
                 to={item.path}
                 className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
-                title={!sidebarOpen ? item.label : undefined}
               >
                 <item.icon className="w-5 h-5 shrink-0" />
-                {sidebarOpen && <span>{item.label}</span>}
-                {sidebarOpen && isActive && <ChevronRight className="w-4 h-4 ml-auto" />}
+                {(mobile || sidebarOpen) && <span>{item.label}</span>}
+                {(mobile || sidebarOpen) && isActive && <ChevronRight className="w-4 h-4 ml-auto" />}
               </Link>
             );
           })}
@@ -136,12 +146,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <Link
             to="/profile"
             className={`sidebar-nav-item ${location.pathname === '/profile' ? 'active' : ''}`}
-            title={!sidebarOpen ? 'Perfil' : undefined}
           >
             <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
               <User className="w-3 h-3 text-primary-foreground" />
             </div>
-            {sidebarOpen && (
+            {(mobile || sidebarOpen) && (
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-sidebar-accent-foreground truncate">{userName}</p>
                 <p className="text-xs truncate" style={{ color: 'hsl(var(--sidebar-foreground))' }}>{userEmail}</p>
@@ -152,16 +161,31 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             onClick={handleLogout}
             className="sidebar-nav-item w-full text-left"
             style={{ color: 'hsl(var(--overdue))' }}
-            title={!sidebarOpen ? 'Sair' : undefined}
           >
             <LogOut className="w-5 h-5 shrink-0" />
-            {sidebarOpen && <span>Sair</span>}
+            {(mobile || sidebarOpen) && <span>Sair</span>}
           </button>
         </div>
+      </>
+    );
+  }
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-background">
+
+      {/* ── DESKTOP SIDEBAR ── */}
+      <aside
+        className="hidden md:flex flex-col transition-all duration-300 shrink-0"
+        style={{
+          width: sidebarOpen ? '240px' : '68px',
+          background: 'hsl(var(--sidebar-background))',
+        }}
+      >
+        <SidebarContent />
       </aside>
 
-      {/* Toggle button */}
-      <div className="relative">
+      {/* Toggle button (desktop only) */}
+      <div className="hidden md:block relative">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           className="absolute top-4 -left-3 z-10 w-6 h-6 rounded-full border border-border bg-card shadow-sm flex items-center justify-center hover:bg-muted transition-colors"
@@ -170,10 +194,46 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </button>
       </div>
 
+      {/* ── MOBILE OVERLAY DRAWER ── */}
+      {mobileMenuOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          {/* Drawer */}
+          <aside
+            className="fixed inset-y-0 left-0 z-50 flex flex-col w-72 md:hidden shadow-xl"
+            style={{ background: 'hsl(var(--sidebar-background))' }}
+          >
+            <SidebarContent mobile />
+          </aside>
+        </>
+      )}
+
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
-        {children}
-      </main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Mobile top bar */}
+        <header className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-card shrink-0">
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="p-2 rounded-lg hover:bg-muted transition-colors"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
+              <Home className="w-4 h-4 text-primary-foreground" />
+            </div>
+            <span className="font-bold text-sm">Living Gest</span>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
