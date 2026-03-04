@@ -1,13 +1,23 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, LogOut, User, ChevronRight, Menu, X, Home, Wallet
+  LayoutDashboard, LogOut, User, ChevronRight, Menu, X, Home, Wallet,
+  FileBarChart2, DoorOpen, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-  { label: 'Financeiro', icon: Wallet, path: '/financeiro' },
+  {
+    label: 'Financeiro',
+    icon: Wallet,
+    path: '/financeiro',
+    children: [
+      { label: 'Registros', icon: Wallet, path: '/financeiro' },
+      { label: 'Relatório Mensal', icon: FileBarChart2, path: '/financeiro/relatorio' },
+      { label: 'Índice de Vacância', icon: DoorOpen, path: '/financeiro/vacancia' },
+    ],
+  },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -15,6 +25,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [financeiroOpen, setFinanceiroOpen] = useState(
+    location.pathname.startsWith('/financeiro')
+  );
 
   async function handleLogout() {
     await signOut();
@@ -51,6 +64,58 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = location.pathname.startsWith(item.path);
+
+            if (item.children) {
+              return (
+                <div key={item.path}>
+                  {/* Item pai com toggle */}
+                  <button
+                    onClick={() => {
+                      if (!sidebarOpen) {
+                        setSidebarOpen(true);
+                        setFinanceiroOpen(true);
+                      } else {
+                        setFinanceiroOpen(o => !o);
+                      }
+                    }}
+                    className={`sidebar-nav-item w-full text-left ${isActive ? 'active' : ''}`}
+                    title={!sidebarOpen ? item.label : undefined}
+                  >
+                    <item.icon className="w-5 h-5 shrink-0" />
+                    {sidebarOpen && (
+                      <>
+                        <span className="flex-1">{item.label}</span>
+                        {financeiroOpen
+                          ? <ChevronUp className="w-4 h-4 ml-auto opacity-60" />
+                          : <ChevronDown className="w-4 h-4 ml-auto opacity-60" />
+                        }
+                      </>
+                    )}
+                  </button>
+
+                  {/* Subitens */}
+                  {sidebarOpen && financeiroOpen && (
+                    <div className="ml-3 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
+                      {item.children.map(child => {
+                        const childActive = location.pathname === child.path;
+                        return (
+                          <Link
+                            key={child.path}
+                            to={child.path}
+                            className={`sidebar-nav-item py-1.5 text-sm ${childActive ? 'active' : ''}`}
+                          >
+                            <child.icon className="w-4 h-4 shrink-0" />
+                            <span>{child.label}</span>
+                            {childActive && <ChevronRight className="w-3 h-3 ml-auto" />}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
             return (
               <Link
                 key={item.path}
