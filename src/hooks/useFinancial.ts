@@ -30,7 +30,8 @@ export function useFinancialRecords(apartmentId: string) {
         .from('financial_records')
         .select('*')
         .eq('apartment_id', apartmentId)
-        .order('month', { ascending: true });
+        .order('month', { ascending: true })
+        .limit(10000);             // ← evita corte em contratos longos
       if (error) throw error;
       return data as FinancialRecordDB[];
     },
@@ -38,6 +39,14 @@ export function useFinancialRecords(apartmentId: string) {
   });
 }
 
+/**
+ * Busca TODOS os registros financeiros do usuário para o Dashboard.
+ *
+ * BUG CORRIGIDO: O Supabase tem limite padrão de 1.000 linhas.
+ * Com 33+ apartamentos gerando registros até 2045 (~7.900 linhas),
+ * o corte acontecia por volta de Agosto/2027.
+ * Solução: usar .limit(50000) para garantir que todos os dados sejam retornados.
+ */
 export function useAllFinancialRecords() {
   const { user } = useAuth();
   return useQuery({
@@ -46,7 +55,8 @@ export function useAllFinancialRecords() {
       const { data, error } = await supabase
         .from('financial_records')
         .select('*, apartments!inner(condominium_id, condominiums!inner(user_id))')
-        .order('month', { ascending: true });
+        .order('month', { ascending: true })
+        .limit(50000);             // ← FIX: era 1000 por padrão, cortava em ~Ago/2027
       if (error) throw error;
       return data as FinancialRecordDB[];
     },
@@ -112,14 +122,8 @@ export function useUpdateUnpaidRentValues() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      contractId,
-      apartmentId,
-      rentValue,
-    }: {
-      contractId: string;
-      apartmentId: string;
-      rentValue: number;
-    }) => {
+      contractId, apartmentId, rentValue,
+    }: { contractId: string; apartmentId: string; rentValue: number }) => {
       const { error } = await supabase
         .from('financial_records')
         .update({ rent_value: rentValue })
@@ -183,7 +187,8 @@ export function useBulkGeneratePeriods() {
       const { data: existing } = await supabase
         .from('financial_records')
         .select('month')
-        .eq('contract_id', contractId);
+        .eq('contract_id', contractId)
+        .limit(10000);
 
       const existingMonths = new Set((existing ?? []).map(r => r.month));
       const allRecords = generateMonthsForContract(apartmentId, tenantId, contractId, startDate, rentValue, paymentDay);
