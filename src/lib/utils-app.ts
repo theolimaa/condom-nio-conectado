@@ -34,19 +34,22 @@ export const MONTHS = [
 
 export const YEARS = Array.from({ length: 20 }, (_, i) => 2026 + i);
 
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
 /**
  * Calculate period label and due date for a financial record.
  *
- * Period: startDay of THIS month -> startDay of NEXT month
- * Due date: paymentDay of the month AFTER the period ends
+ * Period: startDay/m/y -> startDay/(m+1)/y
  *
- * Example: Contract starts 25/01, payment_day=1, month key=2026-01
- *   Period:   25/01/2026 a 25/02/2026
- *   Due date: 01/03/2026  (day 1 of March = month after period end)
+ * Due date rule: the first occurrence of paymentDay that is
+ * >= the period end day, within the period-end month or the next.
  *
- * Example: month key=2026-02
- *   Period:   25/02/2026 a 25/03/2026
- *   Due date: 01/04/2026
+ * Examples:
+ *   startDay=6,  payment_day=6,  month=2026-01 -> Period 06/01->06/02, Due 06/02/2026
+ *   startDay=25, payment_day=1,  month=2026-01 -> Period 25/01->25/02, Due 01/03/2026
+ *   startDay=16, payment_day=16, month=2026-01 -> Period 16/01->16/02, Due 16/02/2026
  */
 export function getPeriodAndDueDate(
   monthStr: string,
@@ -62,7 +65,7 @@ export function getPeriodAndDueDate(
     startDay = parsed.getDate();
   }
 
-  // Period: startDay/m/y -> startDay/(m+1)/y
+  // Period bounds
   const periodStartDay = Math.min(startDay, daysInMonth(y, m));
   const nextM = m === 12 ? 1 : m + 1;
   const nextY = m === 12 ? y + 1 : y;
@@ -73,26 +76,30 @@ export function getPeriodAndDueDate(
     ` a ` +
     `${String(periodEndDay).padStart(2, '0')}/${String(nextM).padStart(2, '0')}/${nextY}`;
 
-  // Due date: paymentDay of the month AFTER the period end
-  // Period ends in nextM/nextY, so due date is in dueM/dueY
-  const dueM = nextM === 12 ? 1 : nextM + 1;
-  const dueY = nextM === 12 ? nextY + 1 : nextY;
-  const adjustedDueDay = Math.min(paymentDay, daysInMonth(dueY, dueM));
+  // Due date: first paymentDay >= periodEndDay in nextM, else in nextM+1
+  let dueDateStr: string;
+  let dueDateLabel: string;
 
-  const dueDateStr = `${dueY}-${String(dueM).padStart(2, '0')}-${String(adjustedDueDay).padStart(2, '0')}`;
-  const dueDateLabel = `${String(adjustedDueDay).padStart(2, '0')}/${String(dueM).padStart(2, '0')}/${dueY}`;
+  if (paymentDay >= periodEndDay) {
+    // Due is in the same month the period ends (nextM)
+    const dueDay = Math.min(paymentDay, daysInMonth(nextY, nextM));
+    dueDateStr = `${nextY}-${String(nextM).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`;
+    dueDateLabel = `${String(dueDay).padStart(2, '0')}/${String(nextM).padStart(2, '0')}/${nextY}`;
+  } else {
+    // Due is the month after the period ends
+    const dueM = nextM === 12 ? 1 : nextM + 1;
+    const dueY = nextM === 12 ? nextY + 1 : nextY;
+    const dueDay = Math.min(paymentDay, daysInMonth(dueY, dueM));
+    dueDateStr = `${dueY}-${String(dueM).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`;
+    dueDateLabel = `${String(dueDay).padStart(2, '0')}/${String(dueM).padStart(2, '0')}/${dueY}`;
+  }
 
   return { periodLabel, dueDateStr, dueDateLabel };
 }
 
-function daysInMonth(year: number, month: number): number {
-  return new Date(year, month, 0).getDate();
-}
-
 /**
- * Shared status function.
- * A record is 'overdue' only if today is past the due date
- * (paymentDay of the month AFTER the period end).
+ * Shared status function - uses the same due date logic above.
+ * 'overdue' only if today is strictly past the due date.
  */
 export function getRecordStatus(
   month: string,
@@ -101,17 +108,21 @@ export function getRecordStatus(
   const day = paymentDay ?? 1;
   const [y, m] = month.split('-').map(Number);
 
-  // Period ends in nextM/nextY
   const nextM = m === 12 ? 1 : m + 1;
   const nextY = m === 12 ? y + 1 : y;
+  const periodEndDay = Math.min(1, daysInMonth(nextY, nextM)); // conservative: use 1 as min
 
-  // Due date: paymentDay of the month AFTER the period end
-  const dueM = nextM === 12 ? 1 : nextM + 1;
-  const dueY = nextM === 12 ? nextY + 1 : nextY;
-
-  const maxDay = daysInMonth(dueY, dueM);
-  const dueDay = Math.min(day, maxDay);
-  const dueDate = new Date(dueY, dueM - 1, dueDay);
+  // Reuse same logic
+  let dueDate: Date;
+  if (day >= periodEndDay) {
+    const dueDay = Math.min(day, daysInMonth(nextY, nextM));
+    dueDate = new Date(nextY, nextM - 1, dueDay);
+  } else {
+    const dueM = nextM === 12 ? 1 : nextM + 1;
+    const dueY = nextM === 12 ? nextY + 1 : nextY;
+    const dueDay = Math.min(day, daysInMonth(dueY, dueM));
+    dueDate = new Date(dueY, dueM - 1, dueDay);
+  }
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
