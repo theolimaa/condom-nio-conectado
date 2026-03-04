@@ -151,7 +151,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
                     </td>
                     <td className="px-4 py-3 text-center">
                       {st === 'paid' && <span className="badge-paid"><CheckCircle className="w-3 h-3" /> Pago</span>}
-                      {st === 'pending' && <span className="badge-unpaid">Pendente</span>}
+                      {st === 'pending' && <span className="badge-unpaid">A vencer</span>}
                       {st === 'overdue' && <span className="badge-overdue"><AlertCircle className="w-3 h-3" /> Inadimplente</span>}
                     </td>
                     <td className="px-4 py-3">
