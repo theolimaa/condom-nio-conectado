@@ -76,3 +76,21 @@ export function getPeriodAndDueDate(monthStr: string, contractStartDate: string 
 function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
+
+// Shared status function — uses actual due date (paymentDay of next month)
+// so periods still within the payment window are "pending", not "overdue".
+export function getRecordStatus(
+  month: string,
+  paymentDay: number | null | undefined
+): 'paid' | 'overdue' | 'pending' {
+  const day = paymentDay ?? 1;
+  const [y, m] = month.split('-').map(Number);
+  const nextM = m === 12 ? 1 : m + 1;
+  const nextY = m === 12 ? y + 1 : y;
+  const maxDay = daysInMonth(nextY, nextM);
+  const dueDay = Math.min(day, maxDay);
+  const dueDate = new Date(nextY, nextM - 1, dueDay);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today > dueDate ? 'overdue' : 'pending';
+}
