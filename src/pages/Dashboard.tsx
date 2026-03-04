@@ -7,26 +7,22 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { formatCurrency, MONTHS, YEARS } from '@/lib/utils-app';
+import { formatCurrency, MONTHS, YEARS, getRecordStatus } from '@/lib/utils-app';
 import { useApp } from '@/lib/store';
 import GlobalFilter from '@/components/GlobalFilter';
 import Layout from '@/components/Layout';
 import { useCondominiums, useAddCondominium, useUpdateCondominium, useDeleteCondominium, CondominiumDB } from '@/hooks/useCondominiums';
 import { useApartments } from '@/hooks/useApartments';
 import { useAllFinancialRecords, FinancialRecordDB } from '@/hooks/useFinancial';
+import { useContracts } from '@/hooks/useContracts';
 import { useTenants } from '@/hooks/useTenants';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 
-function getStatus(record: FinancialRecordDB): 'paid' | 'overdue' | 'pending' {
+function getStatus(record: FinancialRecordDB, paymentDay?: number | null): 'paid' | 'overdue' | 'pending' {
   if (record.paid) return 'paid';
-  const today = new Date();
-  const [year, month] = record.month.split('-').map(Number);
-  if (year < today.getFullYear() || (year === today.getFullYear() && month < today.getMonth() + 1)) {
-    return 'overdue';
-  }
-  return 'pending';
+  return getRecordStatus(record.month, paymentDay);
 }
 
 function CondominiumModal({ open, onClose, initial }: {
@@ -168,6 +164,7 @@ export default function Dashboard() {
   const { data: condominiums = [], isLoading: loadingConds } = useCondominiums();
   const { data: apartments = [] } = useApartments();
   const { data: financialRecords = [] } = useAllFinancialRecords();
+  const { data: contracts = [] } = useContracts();
   const { data: allTenants = [] } = useTenants();
   const deleteCondo = useDeleteCondominium();
 
@@ -178,7 +175,10 @@ export default function Dashboard() {
   const [chartCondo, setChartCondo] = useState<string>('all');
 
   // Enrich records with computed status
-  const enrichedRecords = financialRecords.map(r => ({ ...r, computedStatus: getStatus(r) }));
+  const enrichedRecords = financialRecords.map(r => {
+    const contract = contracts.find(c => c.id === r.contract_id);
+    return { ...r, computedStatus: getStatus(r, contract?.payment_day) };
+  });
 
   // Current month key for filtering
   const now = new Date();
@@ -222,23 +222,23 @@ export default function Dashboard() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+      <div className="p-6 space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold">Dashboard</h1>
+            <h1 className="text-2xl font-bold">Dashboard</h1>
             <p className="text-muted-foreground text-sm">Visão geral financeira e de imóveis</p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-3">
             <GlobalFilter />
-            <Button onClick={() => setShowAdd(true)} size="sm" className="md:h-10 md:text-sm">
-              <Plus className="w-4 h-4 mr-1 md:mr-2" /> <span className="hidden sm:inline">Adicionar </span>Condomínio
+            <Button onClick={() => setShowAdd(true)}>
+              <Plus className="w-4 h-4 mr-2" /> Adicionar Condomínio
             </Button>
           </div>
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div
             className="stat-card cursor-pointer hover:shadow-md transition-shadow"
             onClick={() => setReceivedModal(true)}
@@ -292,9 +292,9 @@ export default function Dashboard() {
 
         {/* Grouped Bar Chart */}
         <div className="bg-card rounded-xl border border-border p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+          <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold">Receita Mensal — {chartYear}</h2>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
               <Select value={chartCondo} onValueChange={setChartCondo}>
                 <SelectTrigger className="w-40 h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -310,7 +310,7 @@ export default function Dashboard() {
               </Select>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
+          <ResponsiveContainer width="100%" height={220}>
             <BarChart data={chartData} barGap={2} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
