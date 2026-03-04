@@ -197,38 +197,44 @@ export default function CondominiumDetail() {
 
   return (
     <Layout>
-      <div className="p-6 space-y-6">
+      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/dashboard')} className="p-2 rounded-lg hover:bg-muted transition-colors">
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold">{cond?.name ?? 'Carregando...'}</h1>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button onClick={() => navigate('/dashboard')} className="p-2 rounded-lg hover:bg-muted transition-colors">
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <h1 className="text-xl md:text-2xl font-bold">{cond?.name ?? 'Carregando...'}</h1>
+            </div>
+            <div className="hidden sm:flex items-center gap-2">
+              <GlobalFilter />
+              <Button onClick={() => setShowAdd(true)}>
+                <Plus className="w-4 h-4 mr-2" /> Novo Apartamento
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <GlobalFilter />
-            <Button onClick={() => setShowAdd(true)}>
-              <Plus className="w-4 h-4 mr-2" /> Novo Apartamento
+          <div className="flex items-center gap-2 sm:hidden">
+            <div className="flex-1"><GlobalFilter /></div>
+            <Button onClick={() => setShowAdd(true)} size="sm" className="shrink-0">
+              <Plus className="w-4 h-4 mr-1" /> Apto
             </Button>
           </div>
         </div>
 
         {/* Summary */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-2 md:gap-4">
           <div className="stat-card">
             <p className="text-sm text-muted-foreground mb-1">Total de Aptos</p>
-            <p className="text-2xl font-bold">{apartments.length}</p>
+            <p className="text-xl md:text-2xl font-bold">{apartments.length}</p>
           </div>
           <div className="stat-card">
             <p className="text-sm text-muted-foreground mb-1">Receita</p>
-            <p className="text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(totalReceived)}</p>
+            <p className="text-lg md:text-2xl font-bold truncate" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(totalReceived)}</p>
           </div>
           <div className="stat-card">
             <p className="text-sm text-muted-foreground mb-1">Ano</p>
-            <p className="text-2xl font-bold">{selectedYear}</p>
+            <p className="text-xl md:text-2xl font-bold">{selectedYear}</p>
           </div>
         </div>
 
@@ -244,7 +250,7 @@ export default function CondominiumDetail() {
             <Button className="mt-4" onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-2" /> Adicionar</Button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
             {apartments.map(apt => (
               <ApartmentCard
                 key={apt.id}
