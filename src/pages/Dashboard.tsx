@@ -7,7 +7,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { formatCurrency, MONTHS, YEARS, getRecordStatus } from '@/lib/utils-app';
+import { formatCurrency, MONTHS, YEARS, getRecordStatus, getPeriodAndDueDate } from '@/lib/utils-app';
 import { useApp } from '@/lib/store';
 import GlobalFilter from '@/components/GlobalFilter';
 import Layout from '@/components/Layout';
@@ -98,7 +98,7 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
     return sortDir === 'asc' ? cmp : -cmp;
   }) : enriched;
 
-  const lastColLabel = variant === 'pending' ? 'Data de Vencimento' : variant === 'overdue' ? 'Data Inadimplente' : 'Data Pagamento';
+  const lastColLabel = variant === 'pending' ? 'Data de Vencimento' : variant === 'overdue' ? 'Vencimento Inadimplente' : 'Data Pagamento';
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -131,7 +131,18 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
               <tbody>
                 {sorted.map(r => {
                   const t = tenants.find(t => t.id === r.tenant_id);
-                  const dateCol = variant === 'received' ? (r.payment_date ?? '—') : (r.month ?? '—');
+                  let dateCol: string;
+                  if (variant === 'received') {
+                    dateCol = r.payment_date ?? '—';
+                  } else if (variant === 'overdue') {
+                    const contract = contracts.find(ct => ct.id === r.contract_id);
+                    const { dueDateLabel } = getPeriodAndDueDate(r.month, contract?.start_date ?? null, contract?.payment_day ?? 1);
+                    dateCol = dueDateLabel;
+                  } else {
+                    const contract = contracts.find(ct => ct.id === r.contract_id);
+                    const { dueDateLabel } = getPeriodAndDueDate(r.month, contract?.start_date ?? null, contract?.payment_day ?? 1);
+                    dateCol = dueDateLabel;
+                  }
                   return (
                     <tr key={r.id} className="border-b border-border last:border-0">
                       <td className="px-3 py-2">{r.condo?.name ?? '—'}</td>
