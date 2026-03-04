@@ -11,6 +11,7 @@ import { useFinancialRecords, useUpsertFinancialRecord, FinancialRecordDB } from
 import { useContract } from '@/hooks/useContracts';
 import { useTenants } from '@/hooks/useTenants';
 import { useApartment } from '@/hooks/useApartments';
+import { useCondominiums } from '@/hooks/useCondominiums';
 import ReceiptModalDB from './ReceiptModalDB';
 
 function getStatus(record: FinancialRecordDB, paymentDay?: number | null): 'paid' | 'overdue' | 'pending' {
@@ -28,6 +29,8 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
   const { data: records = [], isLoading } = useFinancialRecords(apartmentId);
   const { data: contract } = useContract(tenantId);
   const { data: apartment } = useApartment(apartmentId);
+  const { data: condominiums = [] } = useCondominiums();
+  const condominiumName = apartment ? (condominiums.find(c => c.id === apartment.condominium_id)?.name ?? '') : '';
   const { data: tenants = [] } = useTenants(apartmentId);
   const upsert = useUpsertFinancialRecord();
 
@@ -193,6 +196,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
           tenant={currentTenant}
           contract={contract ?? null}
           allRecords={tenantRecords}
+          condominiumName={condominiumName}
         />
       )}
 
