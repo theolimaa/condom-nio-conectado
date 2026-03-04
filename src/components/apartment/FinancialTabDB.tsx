@@ -1,6 +1,10 @@
 import { useState } from 'react';
-import { CheckCircle, XCircle, AlertCircle, Receipt, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Receipt, Loader2, CalendarDays } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { useApp } from '@/lib/store';
 import { formatCurrency, MONTHS, YEARS, getPeriodAndDueDate } from '@/lib/utils-app';
 import { useFinancialRecords, useUpsertFinancialRecord, FinancialRecordDB } from '@/hooks/useFinancial';
@@ -35,6 +39,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
   const [filterYear, setFilterYear] = useState(String(state.selectedYear));
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [receiptRecord, setReceiptRecord] = useState<FinancialRecordDB | null>(null);
+  const [paymentModal, setPaymentModal] = useState<{ record: FinancialRecordDB; date: string } | null>(null);
 
   const tenantRecords = records.filter(r => r.tenant_id === tenantId);
   const currentTenant = tenants.find(t => t.id === tenantId);
@@ -54,13 +59,32 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
   const contractStartDate = contract?.start_date ?? null;
 
   async function togglePaid(record: FinancialRecordDB) {
-    const nowPaid = !record.paid;
+    if (!record.paid) {
+      // Abrir modal para confirmar a data de pagamento
+      setPaymentModal({
+        record,
+        date: new Date().toISOString().split('T')[0],
+      });
+    } else {
+      // Desmarcar pagamento diretamente
+      await upsert.mutateAsync({
+        ...record,
+        paid: false,
+        payment_date: null,
+        status: 'Pendente',
+      });
+    }
+  }
+
+  async function confirmPayment() {
+    if (!paymentModal) return;
     await upsert.mutateAsync({
-      ...record,
-      paid: nowPaid,
-      payment_date: nowPaid ? new Date().toISOString().split('T')[0] : null,
-      status: nowPaid ? 'Pago' : 'Pendente',
+      ...paymentModal.record,
+      paid: true,
+      payment_date: paymentModal.date || new Date().toISOString().split('T')[0],
+      status: 'Pago',
     });
+    setPaymentModal(null);
   }
 
   return (
@@ -176,6 +200,40 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
           allRecords={tenantRecords}
         />
       )}
+
+      {/* Payment Date Modal */}
+      <Dialog open={!!paymentModal} onOpenChange={() => setPaymentModal(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarDays className="w-5 h-5 text-primary" />
+              Data de Pagamento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Informe a data em que o pagamento foi recebido.
+            </p>
+            <div>
+              <Label>Data do Pagamento</Label>
+              <Input
+                type="date"
+                className="mt-1"
+                value={paymentModal?.date ?? ''}
+                onChange={e => setPaymentModal(prev => prev ? { ...prev, date: e.target.value } : null)}
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPaymentModal(null)}>Cancelar</Button>
+            <Button onClick={confirmPayment} disabled={upsert.isPending}>
+              {upsert.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+              Confirmar Pagamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
