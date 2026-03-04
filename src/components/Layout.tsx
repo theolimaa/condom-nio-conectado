@@ -31,7 +31,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [financeiroOpen, setFinanceiroOpen] = useState(
     location.pathname.startsWith('/financeiro')
   );
-  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inactivityTimer = useRef<number | null>(null);
 
   // -- Auto-logout por inatividade ------------------------------------------
   const resetTimer = useCallback(() => {
