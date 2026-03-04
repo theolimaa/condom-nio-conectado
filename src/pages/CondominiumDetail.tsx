@@ -13,7 +13,7 @@ import Layout from '@/components/Layout';
 import { useCondominiums } from '@/hooks/useCondominiums';
 import { useApartments, useAddApartment, useUpdateApartment, useDeleteApartment, ApartmentDB } from '@/hooks/useApartments';
 import { useTenants } from '@/hooks/useTenants';
-import { useAllFinancialRecords } from '@/hooks/useFinancial';
+import { useFinancialRecordsByYear } from '@/hooks/useFinancial';
 
 function ApartmentModal({ open, onClose, condominiumId, initial }: {
   open: boolean; onClose: () => void; condominiumId: string; initial?: ApartmentDB;
@@ -68,17 +68,28 @@ function ApartmentCard({ apt, condominiumId, selectedYear, selectedMonth, allFin
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   const { data: tenants = [] } = useTenants(apt.id);
-
   const currentTenant = tenants[0];
+
+  // Registros do apartamento no período selecionado
   const aptRecords = allFinancialRecords.filter(r => {
     if (r.apartment_id !== apt.id) return false;
     const [y, m] = r.month.split('-').map(Number);
     return y === selectedYear && (selectedMonth === null || m - 1 === selectedMonth);
   });
+
+  // Soma apenas registros pagos
   const received = aptRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
+
+  // Meses que estão pagos (para excluir da checagem de inadimplência)
+  const paidMonths = new Set(aptRecords.filter(r => r.paid).map(r => r.month));
+
+  // Um mês é inadimplente SOMENTE se:
+  // 1. Está vencido (passado)
+  // 2. NÃO tem nenhum registro pago para aquele mês
+  const today = new Date();
   const overdue = aptRecords.some(r => {
     if (r.paid) return false;
-    const today = new Date();
+    if (paidMonths.has(r.month)) return false; // mês já pago por outro registro
     const [year, month] = r.month.split('-').map(Number);
     return year < today.getFullYear() || (year === today.getFullYear() && month < today.getMonth() + 1);
   });
@@ -170,13 +181,14 @@ export default function CondominiumDetail() {
 
   const { data: condominiums = [] } = useCondominiums();
   const { data: apartments = [], isLoading } = useApartments(id);
-  // Use global financial records for accurate revenue
-  const { data: allFinancialRecords = [] } = useAllFinancialRecords();
 
   const cond = condominiums.find(c => c.id === id);
   const { selectedYear, selectedMonth } = state;
 
-  // Filter financial records for this condominium's apartments
+  // ✅ CORREÇÃO: busca só o ano selecionado, igual ao Dashboard
+  const { data: allFinancialRecords = [] } = useFinancialRecordsByYear(selectedYear);
+
+  // Receita do condomínio no período
   const condApts = apartments.filter(a => a.condominium_id === id);
   const condRecords = allFinancialRecords.filter(r => {
     if (!condApts.some(a => a.id === r.apartment_id)) return false;
