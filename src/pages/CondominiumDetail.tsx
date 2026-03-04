@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { formatCurrency } from '@/lib/utils-app';
+import { formatCurrency, getRecordStatus } from '@/lib/utils-app';
 import { useApp } from '@/lib/store';
 import GlobalFilter from '@/components/GlobalFilter';
 import Layout from '@/components/Layout';
@@ -14,6 +14,7 @@ import { useCondominiums } from '@/hooks/useCondominiums';
 import { useApartments, useAddApartment, useUpdateApartment, useDeleteApartment, ApartmentDB } from '@/hooks/useApartments';
 import { useTenants } from '@/hooks/useTenants';
 import { useAllFinancialRecords } from '@/hooks/useFinancial';
+import { useContracts } from '@/hooks/useContracts';
 
 function ApartmentModal({ open, onClose, condominiumId, initial }: {
   open: boolean; onClose: () => void; condominiumId: string; initial?: ApartmentDB;
@@ -68,6 +69,7 @@ function ApartmentCard({ apt, condominiumId, selectedYear, selectedMonth, allFin
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   const { data: tenants = [] } = useTenants(apt.id);
+  const { data: contracts = [] } = useContracts();
 
   const currentTenant = tenants[0];
   const aptRecords = allFinancialRecords.filter(r => {
@@ -78,9 +80,8 @@ function ApartmentCard({ apt, condominiumId, selectedYear, selectedMonth, allFin
   const received = aptRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
   const overdue = aptRecords.some(r => {
     if (r.paid) return false;
-    const today = new Date();
-    const [year, month] = r.month.split('-').map(Number);
-    return year < today.getFullYear() || (year === today.getFullYear() && month < today.getMonth() + 1);
+    const contract = contracts.find(c => c.id === r.contract_id);
+    return getRecordStatus(r.month, contract?.payment_day) === 'overdue';
   });
 
   return (
@@ -196,7 +197,7 @@ export default function CondominiumDetail() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+      <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
