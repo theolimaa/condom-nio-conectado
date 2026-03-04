@@ -14,6 +14,9 @@ export interface ContractDB {
   rent_value: number;
   observations: string | null;
   status: string | null;
+  caution_paid: boolean | null;
+  caution_value: number | null;
+  caution_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -86,68 +89,39 @@ export function useUpsertContract() {
   });
 }
 
-/**
- * Encerra contrato com soft-delete no inquilino.
- * O toast de sucesso é disparado pelo COMPONENTE (com botão Desfazer),
- * não aqui dentro.
- */
 export function useCloseContract() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: async ({
-      contractId,
-      tenantId,
-      apartmentId,
-      endDate,
+      contractId, tenantId, apartmentId, endDate,
     }: {
-      contractId: string;
-      tenantId: string;
-      apartmentId: string;
-      endDate: string;
+      contractId: string; tenantId: string; apartmentId: string; endDate: string;
     }) => {
       const { data: tenant, error: tenantErr } = await supabase
-        .from('tenants')
-        .select('*')
-        .eq('id', tenantId)
-        .single();
+        .from('tenants').select('*').eq('id', tenantId).single();
       if (tenantErr) throw tenantErr;
       if (!tenant) throw new Error('Inquilino não encontrado');
 
       const { error: contractErr } = await supabase
-        .from('contracts')
-        .update({ status: 'ended', end_date: endDate })
-        .eq('id', contractId);
+        .from('contracts').update({ status: 'ended', end_date: endDate }).eq('id', contractId);
       if (contractErr) throw contractErr;
 
       const archivedAt = new Date().toISOString();
-
       const { error: archiveErr } = await supabase
-        .from('tenants')
-        .update({ archived_at: archivedAt })
-        .eq('id', tenantId);
+        .from('tenants').update({ archived_at: archivedAt }).eq('id', tenantId);
       if (archiveErr) throw archiveErr;
 
       const { data: prevTenant, error: prevErr } = await supabase
-        .from('previous_tenants')
-        .insert({
-          first_name: tenant.first_name,
-          last_name: tenant.last_name,
-          cpf: tenant.cpf,
-          email: tenant.email,
-          phone: tenant.phone,
-          birth_date: tenant.birth_date,
-          apartment_id: apartmentId,
-          original_id: tenantId,
-          archived_at: archivedAt,
-        })
-        .select()
-        .single();
+        .from('previous_tenants').insert({
+          first_name: tenant.first_name, last_name: tenant.last_name,
+          cpf: tenant.cpf, email: tenant.email, phone: tenant.phone,
+          birth_date: tenant.birth_date, apartment_id: apartmentId,
+          original_id: tenantId, archived_at: archivedAt,
+        }).select().single();
       if (prevErr) throw prevErr;
 
       return { apartmentId, tenantId, prevTenantId: prevTenant.id, contractId };
     },
-
     onSuccess: ({ apartmentId, tenantId }) => {
       qc.invalidateQueries({ queryKey: ['tenants', apartmentId] });
       qc.invalidateQueries({ queryKey: ['tenants'] });
@@ -163,51 +137,28 @@ export function useCloseContract() {
   });
 }
 
-/**
- * Desfaz o encerramento de contrato:
- * - Remove archived_at do inquilino
- * - Restaura contrato para status 'active'
- * - Deleta o registro de previous_tenants
- */
 export function useUndoCloseContract() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: async ({
-      contractId,
-      tenantId,
-      prevTenantId,
-      apartmentId,
+      contractId, tenantId, prevTenantId, apartmentId,
     }: {
-      contractId: string;
-      tenantId: string;
-      prevTenantId: string;
-      apartmentId: string;
+      contractId: string; tenantId: string; prevTenantId: string; apartmentId: string;
     }) => {
-      // Restaura inquilino como ativo
       const { error: tenantErr } = await supabase
-        .from('tenants')
-        .update({ archived_at: null })
-        .eq('id', tenantId);
+        .from('tenants').update({ archived_at: null }).eq('id', tenantId);
       if (tenantErr) throw tenantErr;
 
-      // Restaura contrato para ativo
       const { error: contractErr } = await supabase
-        .from('contracts')
-        .update({ status: 'active', end_date: null })
-        .eq('id', contractId);
+        .from('contracts').update({ status: 'active', end_date: null }).eq('id', contractId);
       if (contractErr) throw contractErr;
 
-      // Remove do histórico
       const { error: prevErr } = await supabase
-        .from('previous_tenants')
-        .delete()
-        .eq('id', prevTenantId);
+        .from('previous_tenants').delete().eq('id', prevTenantId);
       if (prevErr) throw prevErr;
 
       return { apartmentId, tenantId };
     },
-
     onSuccess: ({ apartmentId, tenantId }) => {
       qc.invalidateQueries({ queryKey: ['tenants', apartmentId] });
       qc.invalidateQueries({ queryKey: ['tenants'] });
