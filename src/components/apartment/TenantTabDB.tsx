@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Plus, Trash2, UserPlus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { TenantDB, useUpdateTenant, useDeleteTenant, useResidents, useAddResident, useDeleteResident } from '@/hooks/useTenants';
+import { toast } from 'sonner';
+
+const UNDO_DURATION = 60000; // 60 segundos
 
 export default function TenantTabDB({ tenant, apartmentId }: {
   tenant: TenantDB; apartmentId: string;
@@ -17,6 +20,11 @@ export default function TenantTabDB({ tenant, apartmentId }: {
 
   const [editMode, setEditMode] = useState(false);
   const [showDeleteTenant, setShowDeleteTenant] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(false);
+
+  // Ref para cancelar o timeout se o usuário clicar em Desfazer
+  const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [form, setForm] = useState({
     first_name: tenant.first_name,
     last_name: tenant.last_name,
@@ -53,6 +61,36 @@ export default function TenantTabDB({ tenant, apartmentId }: {
     setShowAddResident(false);
   }
 
+  function handleDeleteConfirm() {
+    setShowDeleteTenant(false);
+    setPendingDelete(true);
+
+    const tenantName = `${tenant.first_name} ${tenant.last_name}`;
+
+    // Agenda a deleção real após 60 segundos
+    deleteTimeoutRef.current = setTimeout(async () => {
+      setPendingDelete(false);
+      await deleteTenant.mutateAsync({ id: tenant.id, apartmentId });
+    }, UNDO_DURATION);
+
+    // Toast com botão Desfazer
+    toast.warning(`${tenantName} será excluído em 1 minuto.`, {
+      duration: UNDO_DURATION,
+      action: {
+        label: '↩ Desfazer',
+        onClick: () => {
+          // Cancela o timeout — a deleção não acontece
+          if (deleteTimeoutRef.current) {
+            clearTimeout(deleteTimeoutRef.current);
+            deleteTimeoutRef.current = null;
+          }
+          setPendingDelete(false);
+          toast.success('Exclusão cancelada!');
+        },
+      },
+    });
+  }
+
   return (
     <div className="space-y-5">
       {/* Tenant info */}
@@ -61,7 +99,14 @@ export default function TenantTabDB({ tenant, apartmentId }: {
         {!editMode ? (
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => setEditMode(true)}>Editar</Button>
-            <Button size="sm" variant="destructive" onClick={() => setShowDeleteTenant(true)}>Excluir Inquilino</Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setShowDeleteTenant(true)}
+              disabled={pendingDelete}
+            >
+              {pendingDelete ? <><Loader2 className="w-3 h-3 animate-spin mr-1" /> Excluindo...</> : 'Excluir Inquilino'}
+            </Button>
           </div>
         ) : (
           <div className="flex gap-2">
@@ -172,16 +217,16 @@ export default function TenantTabDB({ tenant, apartmentId }: {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir Inquilino</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir <strong>{tenant.first_name} {tenant.last_name}</strong>? Todos os seus documentos, contrato e histórico serão excluídos permanentemente.
+              <strong>{tenant.first_name} {tenant.last_name}</strong> será excluído. Você terá <strong>1 minuto</strong> para desfazer antes da exclusão permanente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteTenant.mutate({ id: tenant.id, apartmentId })}
+              onClick={handleDeleteConfirm}
               className="bg-destructive hover:bg-destructive/90"
             >
-              Excluir Definitivamente
+              Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
