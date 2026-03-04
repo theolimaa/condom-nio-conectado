@@ -13,7 +13,7 @@ import GlobalFilter from '@/components/GlobalFilter';
 import Layout from '@/components/Layout';
 import { useCondominiums, useAddCondominium, useUpdateCondominium, useDeleteCondominium, CondominiumDB } from '@/hooks/useCondominiums';
 import { useApartments } from '@/hooks/useApartments';
-import { useAllFinancialRecords, FinancialRecordDB } from '@/hooks/useFinancial';
+import { useFinancialRecordsByYear, FinancialRecordDB } from '@/hooks/useFinancial';
 import { useTenants } from '@/hooks/useTenants';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
@@ -69,7 +69,6 @@ function CondominiumModal({ open, onClose, initial }: {
   );
 }
 
-// Detail modal for clickable cards with sorting and Condomínio column
 type ModalSortField = 'condo' | 'apt';
 type ModalSortDir = 'asc' | 'desc';
 
@@ -167,48 +166,46 @@ export default function Dashboard() {
 
   const { data: condominiums = [], isLoading: loadingConds } = useCondominiums();
   const { data: apartments = [] } = useApartments();
-  const { data: financialRecords = [] } = useAllFinancialRecords();
   const { data: allTenants = [] } = useTenants();
   const deleteCondo = useDeleteCondominium();
 
   const { selectedYear, selectedMonth } = state;
 
-  // Chart-specific filters
+  // Chart year pode ser diferente do filtro global
   const [chartYear, setChartYear] = useState(String(selectedYear));
   const [chartCondo, setChartCondo] = useState<string>('all');
 
-  // Enrich records with computed status
-  const enrichedRecords = financialRecords.map(r => ({ ...r, computedStatus: getStatus(r) }));
+  // ✅ CORREÇÃO: busca apenas o ano selecionado (~400 registros) em vez de todos os 6000+
+  const { data: cardRecordsRaw = [] } = useFinancialRecordsByYear(selectedYear);
+  // Chart pode ter ano diferente do filtro — busca separado se necessário
+  const { data: chartRecordsRaw = [] } = useFinancialRecordsByYear(Number(chartYear));
 
-  // Current month key for filtering
-  const now = new Date();
-  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  // Enrich com status computado
+  const cardRecords = cardRecordsRaw.map(r => ({ ...r, computedStatus: getStatus(r) }));
+  const chartRecords = chartRecordsRaw.map(r => ({ ...r, computedStatus: getStatus(r) }));
 
-  // Filtered records based on global filter (year/month)
-  const filteredRecords = enrichedRecords.filter(r => {
-    const [year, month] = r.month.split('-').map(Number);
-    return year === selectedYear && (selectedMonth === null || month - 1 === selectedMonth);
+  // Filtra pelos cards: mês selecionado (ou ano inteiro)
+  const filteredRecords = cardRecords.filter(r => {
+    const [, month] = r.month.split('-').map(Number);
+    return selectedMonth === null || month - 1 === selectedMonth;
   });
 
-  // Card values — all scoped to the filtered period
+  // Valores dos cards
   const totalReceived = filteredRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
   const totalPending = filteredRecords.filter(r => r.computedStatus === 'pending').reduce((s, r) => s + r.rent_value, 0);
-  // Inadimplente: only current filtered period, NOT all history
   const totalOverdue = filteredRecords.filter(r => r.computedStatus === 'overdue').reduce((s, r) => s + r.rent_value, 0);
 
-  // Records for modals
   const pendingRecords = filteredRecords.filter(r => r.computedStatus === 'pending');
   const overdueRecords = filteredRecords.filter(r => r.computedStatus === 'overdue');
   const receivedRecords = filteredRecords.filter(r => r.paid);
 
-  // Grouped bar chart data
+  // Dados do gráfico — usa chartRecords (ano do gráfico)
   const chartData = MONTHS.map((month, idx) => {
-    const monthRecords = enrichedRecords.filter(r => {
-      const [y, m] = r.month.split('-').map(Number);
-      const matchYear = y === Number(chartYear);
+    const monthRecords = chartRecords.filter(r => {
+      const [, m] = r.month.split('-').map(Number);
       const matchMonth = m - 1 === idx;
       const matchCondo = chartCondo === 'all' || apartments.find(a => a.id === r.apartment_id)?.condominium_id === chartCondo;
-      return matchYear && matchMonth && matchCondo;
+      return matchMonth && matchCondo;
     });
     return {
       month: month.substring(0, 3),
@@ -239,10 +236,7 @@ export default function Dashboard() {
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div
-            className="stat-card cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => setReceivedModal(true)}
-          >
+          <div className="stat-card cursor-pointer hover:shadow-md transition-shadow" onClick={() => setReceivedModal(true)}>
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">Receita Recebida</p>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--paid)/0.12)' }}>
@@ -252,10 +246,7 @@ export default function Dashboard() {
             <p className="text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(totalReceived)}</p>
             <p className="text-xs text-muted-foreground mt-1">Clique para detalhes • {filterLabel} {selectedYear}</p>
           </div>
-          <div
-            className="stat-card cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => setPendingModal(true)}
-          >
+          <div className="stat-card cursor-pointer hover:shadow-md transition-shadow" onClick={() => setPendingModal(true)}>
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">A Receber</p>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--warning)/0.12)' }}>
@@ -265,10 +256,7 @@ export default function Dashboard() {
             <p className="text-2xl font-bold" style={{ color: 'hsl(var(--warning))' }}>{formatCurrency(totalPending)}</p>
             <p className="text-xs text-muted-foreground mt-1">Clique para detalhes • {filterLabel} {selectedYear}</p>
           </div>
-          <div
-            className="stat-card cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => setOverdueModal(true)}
-          >
+          <div className="stat-card cursor-pointer hover:shadow-md transition-shadow" onClick={() => setOverdueModal(true)}>
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">Inadimplente</p>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--overdue)/0.12)' }}>
@@ -425,41 +413,20 @@ export default function Dashboard() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Pending Modal */}
-      <DetailModal
-        open={pendingModal}
-        onClose={() => setPendingModal(false)}
+      <DetailModal open={pendingModal} onClose={() => setPendingModal(false)}
         title={`A Receber — ${filterLabel} ${selectedYear}`}
-        records={pendingRecords}
-        tenants={allTenants}
-        apartments={apartments}
-        condominiums={condominiums}
-        variant="pending"
-      />
+        records={pendingRecords} tenants={allTenants} apartments={apartments}
+        condominiums={condominiums} variant="pending" />
 
-      {/* Overdue Modal */}
-      <DetailModal
-        open={overdueModal}
-        onClose={() => setOverdueModal(false)}
+      <DetailModal open={overdueModal} onClose={() => setOverdueModal(false)}
         title={`Inadimplentes — ${filterLabel} ${selectedYear}`}
-        records={overdueRecords}
-        tenants={allTenants}
-        apartments={apartments}
-        condominiums={condominiums}
-        variant="overdue"
-      />
+        records={overdueRecords} tenants={allTenants} apartments={apartments}
+        condominiums={condominiums} variant="overdue" />
 
-      {/* Received Modal */}
-      <DetailModal
-        open={receivedModal}
-        onClose={() => setReceivedModal(false)}
+      <DetailModal open={receivedModal} onClose={() => setReceivedModal(false)}
         title={`Receita Recebida — ${filterLabel} ${selectedYear}`}
-        records={receivedRecords}
-        tenants={allTenants}
-        apartments={apartments}
-        condominiums={condominiums}
-        variant="received"
-      />
+        records={receivedRecords} tenants={allTenants} apartments={apartments}
+        condominiums={condominiums} variant="received" />
     </Layout>
   );
 }
