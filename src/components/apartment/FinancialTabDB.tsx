@@ -45,14 +45,22 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
     return matchYear && matchMonth;
   }).sort((a, b) => a.month.localeCompare(b.month));
 
+  // Deduplicar por month: manter o pago, senão o primeiro
+  const seen = new Map<string, typeof filteredRecords[0]>();
+  for (const r of filteredRecords) {
+    const existing = seen.get(r.month);
+    if (!existing || r.paid) seen.set(r.month, r);
+  }
+  const dedupedRecords = Array.from(seen.values()).sort((a, b) => a.month.localeCompare(b.month));
+
   // FIX: declarar paymentDay ANTES dos totais para que getStatus receba o valor correto
   const paymentDay = contract?.payment_day ?? 1;
   const contractStartDate = contract?.start_date ?? null;
 
   // FIX: passar paymentDay em todos os getStatus dos totais
-  const totalPaid = filteredRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
-  const totalOverdue = filteredRecords.filter(r => getStatus(r, paymentDay) === 'overdue').reduce((s, r) => s + r.rent_value, 0);
-  const totalPending = filteredRecords.filter(r => !r.paid && getStatus(r, paymentDay) === 'pending').reduce((s, r) => s + r.rent_value, 0);
+  const totalPaid = dedupedRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
+  const totalOverdue = dedupedRecords.filter(r => getStatus(r, paymentDay) === 'overdue').reduce((s, r) => s + r.rent_value, 0);
+  const totalPending = dedupedRecords.filter(r => !r.paid && getStatus(r, paymentDay) === 'pending').reduce((s, r) => s + r.rent_value, 0);
 
   async function togglePaid(record: FinancialRecordDB) {
     if (!record.paid) {
@@ -111,7 +119,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
       {/* Records table */}
       {isLoading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
-      ) : filteredRecords.length === 0 ? (
+      ) : dedupedRecords.length === 0 ? (
         <div className="text-center py-10 text-muted-foreground">
           <p>Nenhum período encontrado. Os períodos são gerados automaticamente ao salvar o contrato.</p>
         </div>
@@ -129,7 +137,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
               </tr>
             </thead>
             <tbody>
-              {filteredRecords.map(r => {
+              {dedupedRecords.map(r => {
                 const st = getStatus(r, paymentDay);
                 const { periodLabel, dueDateLabel } = getPeriodAndDueDate(r.month, contractStartDate, paymentDay);
                 return (
