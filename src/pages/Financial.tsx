@@ -117,6 +117,7 @@ export default function Financial() {
   const receiptApt = receiptRecord ? apartments.find(a => a.id === receiptRecord.apartment_id) : null;
   const receiptTenant = receiptRecord ? allTenants.find(t => t.id === receiptRecord.tenant_id) : null;
   const receiptContract = receiptRecord ? contracts.find(c => c.id === receiptRecord.contract_id) : null;
+  const receiptCondo = receiptApt ? condominiums.find(c => c.id === receiptApt.condominium_id) : null;
 
   function SortHeader({ field, children }: { field: SortField; children: React.ReactNode }) {
     return (
@@ -282,6 +283,7 @@ export default function Financial() {
           tenant={receiptTenant}
           contract={receiptContract ?? null}
           allRecords={financialRecords.filter(r => r.apartment_id === receiptRecord.apartment_id && r.tenant_id === receiptRecord.tenant_id)}
+          condominiumName={receiptCondo?.name ?? ''}
         />
       )}
     </Layout>
