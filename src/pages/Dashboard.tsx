@@ -134,7 +134,7 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
                   const t = tenants.find(t => t.id === r.tenant_id);
                   let dateCol: string;
                   if (variant === 'received') {
-                    dateCol = r.payment_date ?? '--';
+                    dateCol = r.payment_date ?? '-';
                   } else if (variant === 'overdue') {
                     const contract = contracts.find(ct => ct.id === r.contract_id);
                     const { dueDateLabel } = getPeriodAndDueDate(r.month, contract?.start_date ?? null, contract?.payment_day ?? 1);
@@ -146,9 +146,9 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
                   }
                   return (
                     <tr key={r.id} className="border-b border-border last:border-0">
-                      <td className="px-3 py-2">{r.condo?.name ?? '--'}</td>
-                      <td className="px-3 py-2">{r.apt?.unit_number ?? '--'}</td>
-                      <td className="px-3 py-2">{t ? `${t.first_name} ${t.last_name}` : '--'}</td>
+                      <td className="px-3 py-2">{r.condo?.name ?? '-'}</td>
+                      <td className="px-3 py-2">{r.apt?.unit_number ?? '-'}</td>
+                      <td className="px-3 py-2">{t ? `${t.first_name} ${t.last_name}` : '-'}</td>
                       <td className="px-3 py-2 text-right font-semibold">{formatCurrency(r.rent_value)}</td>
                       <td className="px-3 py-2 text-center text-xs">{dateCol}</td>
                     </tr>
@@ -202,7 +202,7 @@ export default function Dashboard() {
     return year === selectedYear && (selectedMonth === null || month - 1 === selectedMonth);
   });
 
-  // Card values -- all scoped to the filtered period
+  // Card values - all scoped to the filtered period
   const totalReceived = filteredRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
   const totalPending = filteredRecords.filter(r => r.computedStatus === 'pending').reduce((s, r) => s + r.rent_value, 0);
   // Inadimplente: only current filtered period, NOT all history
@@ -272,7 +272,7 @@ export default function Dashboard() {
               </div>
             </div>
             <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(totalReceived)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes • {filterLabel} {selectedYear}</p>
+            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes * {filterLabel} {selectedYear}</p>
           </div>
           <div
             className="stat-card cursor-pointer hover:shadow-md transition-shadow"
@@ -285,7 +285,7 @@ export default function Dashboard() {
               </div>
             </div>
             <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--warning))' }}>{formatCurrency(totalPending)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes • {filterLabel} {selectedYear}</p>
+            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes * {filterLabel} {selectedYear}</p>
           </div>
           <div
             className="stat-card cursor-pointer hover:shadow-md transition-shadow"
@@ -298,7 +298,7 @@ export default function Dashboard() {
               </div>
             </div>
             <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--overdue))' }}>{formatCurrency(totalOverdue)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes • {filterLabel} {selectedYear}</p>
+            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes * {filterLabel} {selectedYear}</p>
           </div>
           <div className="stat-card">
             <div className="flex items-center justify-between mb-3">
@@ -315,7 +315,7 @@ export default function Dashboard() {
         {/* Grouped Bar Chart */}
         <div className="bg-card rounded-xl border border-border p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold">Receita Mensal -- {chartYear}</h2>
+            <h2 className="text-base font-semibold">Receita Mensal - {chartYear}</h2>
             <div className="flex items-center gap-2">
               <Select value={chartCondo} onValueChange={setChartCondo}>
                 <SelectTrigger className="w-40 h-8 text-xs"><SelectValue /></SelectTrigger>
@@ -410,7 +410,7 @@ export default function Dashboard() {
                         onClick={() => navigate(`/condominiums/${cond.id}`)}
                         className="text-sm text-primary font-medium hover:underline flex items-center gap-1"
                       >
-                        Ver apartamentos →
+                        Ver apartamentos ->
                       </button>
                     </div>
                   </div>
@@ -451,7 +451,7 @@ export default function Dashboard() {
       <DetailModal
         open={pendingModal}
         onClose={() => setPendingModal(false)}
-        title={`A Receber -- ${filterLabel} ${selectedYear}`}
+        title={`A Receber - ${filterLabel} ${selectedYear}`}
         records={pendingRecords}
         tenants={allTenants}
         apartments={apartments}
@@ -463,7 +463,7 @@ export default function Dashboard() {
       <DetailModal
         open={overdueModal}
         onClose={() => setOverdueModal(false)}
-        title={`Inadimplentes -- ${filterLabel} ${selectedYear}`}
+        title={`Inadimplentes - ${filterLabel} ${selectedYear}`}
         records={overdueRecords}
         tenants={allTenants}
         apartments={apartments}
@@ -475,7 +475,7 @@ export default function Dashboard() {
       <DetailModal
         open={receivedModal}
         onClose={() => setReceivedModal(false)}
-        title={`Receita Recebida -- ${filterLabel} ${selectedYear}`}
+        title={`Receita Recebida - ${filterLabel} ${selectedYear}`}
         records={receivedRecords}
         tenants={allTenants}
         apartments={apartments}
