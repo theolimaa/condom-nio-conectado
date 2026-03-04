@@ -20,7 +20,6 @@ export interface ContractDB {
 
 export function useContract(tenantId: string) {
   const { user } = useAuth();
-
   return useQuery({
     queryKey: ['contract', tenantId],
     queryFn: async () => {
@@ -39,7 +38,6 @@ export function useContract(tenantId: string) {
 
 export function useContracts() {
   const { user } = useAuth();
-
   return useQuery({
     queryKey: ['contracts_all'],
     queryFn: async () => {
@@ -56,7 +54,6 @@ export function useContracts() {
 
 export function useUpsertContract() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: async (contract: Omit<ContractDB, 'id' | 'created_at' | 'updated_at'> & { id?: string }) => {
       if (contract.id) {
@@ -89,6 +86,20 @@ export function useUpsertContract() {
   });
 }
 
+/**
+ * Encerramento de contrato com SOFT-DELETE:
+ *
+ * Em vez de deletar o inquilino (o que apagaria documentos e contratos),
+ * marcamos archived_at no registro do inquilino. Todos os dados ficam
+ * intactos e linkados via tenant_id para a aba "Anteriores".
+ *
+ * Fluxo:
+ * 1. Atualiza contrato → status 'ended', end_date
+ * 2. Marca inquilino como arquivado (archived_at = now)
+ * 3. Registra em previous_tenants (para a listagem na aba Anteriores)
+ * 4. Registros financeiros futuros (não pagos) ficam preservados no histórico
+ * 5. Invalida queries para o apartamento aparecer como "Vago"
+ */
 export function useCloseContract() {
   const qc = useQueryClient();
 
@@ -104,7 +115,7 @@ export function useCloseContract() {
       apartmentId: string;
       endDate: string;
     }) => {
-      // 1. Buscar dados do inquilino antes de deletar
+      // 1. Buscar dados do inquilino
       const { data: tenant, error: tenantErr } = await supabase
         .from('tenants')
         .select('*')
@@ -113,14 +124,25 @@ export function useCloseContract() {
       if (tenantErr) throw tenantErr;
       if (!tenant) throw new Error('Inquilino não encontrado');
 
-      // 2. Buscar dados do contrato para o histórico
-      const { data: contract } = await supabase
+      // 2. Marcar contrato como encerrado (mantém na tabela para histórico)
+      const { error: contractErr } = await supabase
         .from('contracts')
-        .select('*')
-        .eq('id', contractId)
-        .single();
+        .update({ status: 'ended', end_date: endDate })
+        .eq('id', contractId);
+      if (contractErr) throw contractErr;
 
-      // 3. Inserir no histórico de inquilinos anteriores
+      // 3. Soft-delete do inquilino: apenas marca archived_at
+      //    Os documentos, contrato e registros financeiros continuam linkados
+      //    via tenant_id para a aba "Anteriores" usar
+      const archivedAt = new Date().toISOString();
+      const { error: archiveErr } = await supabase
+        .from('tenants')
+        .update({ archived_at: archivedAt })
+        .eq('id', tenantId);
+      if (archiveErr) throw archiveErr;
+
+      // 4. Registrar em previous_tenants para a listagem
+      //    original_id aponta para tenants.id → usado para buscar docs/contrato
       const { error: prevErr } = await supabase.from('previous_tenants').insert({
         first_name: tenant.first_name,
         last_name: tenant.last_name,
@@ -128,44 +150,17 @@ export function useCloseContract() {
         email: tenant.email,
         phone: tenant.phone,
         birth_date: tenant.birth_date,
-        apartment_id: tenant.apartment_id,
-        original_id: tenant.id,
-        archived_at: new Date().toISOString(),
+        apartment_id: apartmentId,
+        original_id: tenantId,
+        archived_at: archivedAt,
       });
       if (prevErr) throw prevErr;
 
-      // 4. Nullar tenant_id nos registros financeiros (coluna é nullable)
-      //    Mantemos os registros para histórico financeiro do apartamento
-      await supabase
-        .from('financial_records')
-        .update({ tenant_id: null })
-        .eq('tenant_id', tenantId)
-        .eq('paid', false); // só limpa os não pagos; mantém referência nos pagos
-
-      // 5. Deletar moradores adicionais
-      await supabase.from('residents').delete().eq('tenant_id', tenantId);
-
-      // 6. Deletar documentos do inquilino
-      await supabase.from('documents').delete().eq('tenant_id', tenantId);
-
-      // 7. Deletar o contrato (FK NOT NULL — precisa ser deletado antes do inquilino)
-      const { error: contractDelErr } = await supabase
-        .from('contracts')
-        .delete()
-        .eq('id', contractId);
-      if (contractDelErr) throw contractDelErr;
-
-      // 8. Agora sim deletar o inquilino (sem FK bloqueando)
-      const { error: tenantDelErr } = await supabase
-        .from('tenants')
-        .delete()
-        .eq('id', tenantId);
-      if (tenantDelErr) throw tenantDelErr;
-
       return { apartmentId, tenantId };
     },
+
     onSuccess: ({ apartmentId, tenantId }) => {
-      // Invalidar TODAS as queries afetadas em cascata
+      // Invalida todas as queries relevantes em cascata
       qc.invalidateQueries({ queryKey: ['tenants', apartmentId] });
       qc.invalidateQueries({ queryKey: ['tenants'] });
       qc.invalidateQueries({ queryKey: ['contract', tenantId] });
