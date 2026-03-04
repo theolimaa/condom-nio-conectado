@@ -31,7 +31,7 @@ export function useFinancialRecords(apartmentId: string) {
         .select('*')
         .eq('apartment_id', apartmentId)
         .order('month', { ascending: true })
-        .limit(10000);             // ← evita corte em contratos longos
+        .limit(10000);
       if (error) throw error;
       return data as FinancialRecordDB[];
     },
@@ -40,12 +40,32 @@ export function useFinancialRecords(apartmentId: string) {
 }
 
 /**
- * Busca TODOS os registros financeiros do usuário para o Dashboard.
- *
- * BUG CORRIGIDO: O Supabase tem limite padrão de 1.000 linhas.
- * Com 33+ apartamentos gerando registros até 2045 (~7.900 linhas),
- * o corte acontecia por volta de Agosto/2027.
- * Solução: usar .limit(50000) para garantir que todos os dados sejam retornados.
+ * Busca registros financeiros de UM ANO ESPECÍFICO.
+ * Resolve o problema de limite do Supabase: em vez de buscar todos os
+ * 6000+ registros de uma vez, busca apenas os ~400 do ano selecionado.
+ */
+export function useFinancialRecordsByYear(year: number) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['financial_records_year', user?.id, year],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('financial_records')
+        .select('*')
+        .gte('month', `${year}-01`)
+        .lte('month', `${year}-12`)
+        .order('month', { ascending: true });
+      if (error) throw error;
+      return data as FinancialRecordDB[];
+    },
+    enabled: !!user && !!year,
+  });
+}
+
+/**
+ * Hook legado — mantido para compatibilidade com Financial.tsx
+ * Usa limit alto para tentar pegar tudo, mas prefira useFinancialRecordsByYear
+ * para o Dashboard.
  */
 export function useAllFinancialRecords() {
   const { user } = useAuth();
@@ -54,9 +74,9 @@ export function useAllFinancialRecords() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('financial_records')
-        .select('*, apartments!inner(condominium_id, condominiums!inner(user_id))')
+        .select('*')
         .order('month', { ascending: true })
-        .limit(50000);             // ← FIX: era 1000 por padrão, cortava em ~Ago/2027
+        .limit(50000);
       if (error) throw error;
       return data as FinancialRecordDB[];
     },
@@ -91,6 +111,7 @@ export function useUpsertFinancialRecord() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['financial_records', data.apartment_id] });
+      qc.invalidateQueries({ queryKey: ['financial_records_year'] });
       qc.invalidateQueries({ queryKey: ['financial_records_all'] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -107,6 +128,7 @@ export function useDeleteFinancialRecord() {
     },
     onSuccess: (apartmentId) => {
       qc.invalidateQueries({ queryKey: ['financial_records', apartmentId] });
+      qc.invalidateQueries({ queryKey: ['financial_records_year'] });
       qc.invalidateQueries({ queryKey: ['financial_records_all'] });
       toast.success('Registro removido!');
     },
@@ -114,16 +136,10 @@ export function useDeleteFinancialRecord() {
   });
 }
 
-/**
- * Ao editar contrato com novo valor de aluguel, atualiza todos os registros
- * NÃO PAGOS daquele contrato em cascata.
- */
 export function useUpdateUnpaidRentValues() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      contractId, apartmentId, rentValue,
-    }: { contractId: string; apartmentId: string; rentValue: number }) => {
+    mutationFn: async ({ contractId, apartmentId, rentValue }: { contractId: string; apartmentId: string; rentValue: number }) => {
       const { error } = await supabase
         .from('financial_records')
         .update({ rent_value: rentValue })
@@ -134,6 +150,7 @@ export function useUpdateUnpaidRentValues() {
     },
     onSuccess: (apartmentId) => {
       qc.invalidateQueries({ queryKey: ['financial_records', apartmentId] });
+      qc.invalidateQueries({ queryKey: ['financial_records_year'] });
       qc.invalidateQueries({ queryKey: ['financial_records_all'] });
     },
     onError: (e: Error) => toast.error(`Erro ao atualizar valores: ${e.message}`),
@@ -205,6 +222,7 @@ export function useBulkGeneratePeriods() {
     },
     onSuccess: (count) => {
       qc.invalidateQueries({ queryKey: ['financial_records'] });
+      qc.invalidateQueries({ queryKey: ['financial_records_year'] });
       qc.invalidateQueries({ queryKey: ['financial_records_all'] });
       if (count > 0) toast.success(`${count} períodos financeiros gerados!`);
     },
