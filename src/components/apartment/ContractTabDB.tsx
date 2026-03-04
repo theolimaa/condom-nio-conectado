@@ -25,12 +25,8 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [form, setForm] = useState<Partial<ContractDB>>({});
 
-  // Guarda os dados do último encerramento para poder desfazer
   const lastCloseRef = useRef<{
-    contractId: string;
-    tenantId: string;
-    prevTenantId: string;
-    apartmentId: string;
+    contractId: string; tenantId: string; prevTenantId: string; apartmentId: string;
   } | null>(null);
 
   function startEdit() {
@@ -51,14 +47,14 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
       rent_value: Number(form.rent_value),
       observations: form.observations ?? null,
       status: 'active',
+      caution_paid: form.caution_paid ?? false,
+      caution_value: form.caution_value ? Number(form.caution_value) : null,
+      caution_date: form.caution_date ?? null,
     });
     if (result?.id) {
       await bulkGenerate.mutateAsync({
-        apartmentId,
-        tenantId,
-        contractId: result.id,
-        startDate: form.start_date!,
-        rentValue: Number(form.rent_value),
+        apartmentId, tenantId, contractId: result.id,
+        startDate: form.start_date!, rentValue: Number(form.rent_value),
         paymentDay: form.payment_day ?? 1,
       });
     }
@@ -67,25 +63,14 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
 
   async function handleClose() {
     if (!contract) return;
-
-    const result = await closeContract.mutateAsync({
-      contractId: contract.id,
-      tenantId,
-      apartmentId,
-      endDate,
-    });
-
+    const result = await closeContract.mutateAsync({ contractId: contract.id, tenantId, apartmentId, endDate });
     setShowClose(false);
 
-    // Salva referência para desfazer
     lastCloseRef.current = {
-      contractId: result.contractId,
-      tenantId: result.tenantId,
-      prevTenantId: result.prevTenantId,
-      apartmentId: result.apartmentId,
+      contractId: result.contractId, tenantId: result.tenantId,
+      prevTenantId: result.prevTenantId, apartmentId: result.apartmentId,
     };
 
-    // Toast com botão Desfazer por 60 segundos
     toast.success(`Contrato de ${tenantName} encerrado.`, {
       duration: 60000,
       action: {
@@ -128,11 +113,65 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
             <Label>Valor do Aluguel *</Label>
             <Input className="mt-1" type="number" step="0.01" placeholder="1500.00" value={form.rent_value ?? ''} onChange={e => setForm({ ...form, rent_value: Number(e.target.value) })} />
           </div>
+          <div>
+            <Label>Observações</Label>
+            <Input className="mt-1" value={form.observations ?? ''} onChange={e => setForm({ ...form, observations: e.target.value })} placeholder="Observações do contrato..." />
+          </div>
         </div>
-        <div>
-          <Label>Observações</Label>
-          <Input className="mt-1" value={form.observations ?? ''} onChange={e => setForm({ ...form, observations: e.target.value })} placeholder="Observações do contrato..." />
+
+        {/* Caução */}
+        <div className="border border-border rounded-xl p-4 space-y-3">
+          <p className="font-semibold text-sm">Caução</p>
+          <div className="flex items-center gap-3">
+            <Label className="text-sm">Caução paga?</Label>
+            <div className="flex gap-3">
+              <label className="flex items-center gap-1.5 cursor-pointer text-sm">
+                <input
+                  type="radio"
+                  name="caution_paid"
+                  checked={form.caution_paid === true}
+                  onChange={() => setForm({ ...form, caution_paid: true })}
+                />
+                Sim
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer text-sm">
+                <input
+                  type="radio"
+                  name="caution_paid"
+                  checked={!form.caution_paid}
+                  onChange={() => setForm({ ...form, caution_paid: false, caution_value: null, caution_date: null })}
+                />
+                Não
+              </label>
+            </div>
+          </div>
+
+          {form.caution_paid && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Valor da Caução</Label>
+                <Input
+                  className="mt-1"
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={form.caution_value ?? ''}
+                  onChange={e => setForm({ ...form, caution_value: Number(e.target.value) })}
+                />
+              </div>
+              <div>
+                <Label>Data do Pagamento</Label>
+                <Input
+                  className="mt-1"
+                  type="date"
+                  value={form.caution_date ?? ''}
+                  onChange={e => setForm({ ...form, caution_date: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
         </div>
+
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
           <Button onClick={handleSave} disabled={upsertContract.isPending}>
@@ -186,6 +225,16 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
             <p className="font-semibold">Todo dia {contract.payment_day}</p>
           </div>
         )}
+        {/* Exibe caução se preenchida */}
+        {contract?.caution_paid && (
+          <div className="bg-muted/50 rounded-xl p-4 col-span-2">
+            <p className="text-xs text-muted-foreground mb-1">Caução</p>
+            <p className="font-semibold text-sm">
+              Paga{contract.caution_value ? ` — ${formatCurrency(contract.caution_value)}` : ''}
+              {contract.caution_date ? ` em ${formatDate(contract.caution_date)}` : ''}
+            </p>
+          </div>
+        )}
       </div>
 
       {contract?.observations && (
@@ -195,7 +244,6 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
         </div>
       )}
 
-      {/* Close contract dialog */}
       <AlertDialog open={showClose} onOpenChange={setShowClose}>
         <AlertDialogContent>
           <AlertDialogHeader>
