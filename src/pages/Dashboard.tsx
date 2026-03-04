@@ -16,38 +16,38 @@ import { useApartments } from '@/hooks/useApartments';
 import { useAllFinancialRecords, FinancialRecordDB } from '@/hooks/useFinancial';
 import { useContracts } from '@/hooks/useContracts';
 import { useTenants } from '@/hooks/useTenants';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
-} from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 
 function getStatus(record: FinancialRecordDB, paymentDay?: number | null): 'paid' | 'overdue' | 'pending' {
   if (record.paid) return 'paid';
   return getRecordStatus(record.month, paymentDay);
 }
 
-function CondominiumModal({ open, onClose, initial }: {
-  open: boolean; onClose: () => void; initial?: CondominiumDB;
-}) {
+// Extrai o mês (YYYY-MM) da data de vencimento de um registro
+function getDueDateMonth(record: FinancialRecordDB, contract?: { start_date?: string | null; payment_day?: number | null } | null): string | null {
+  if (!contract) return null;
+  const { dueDateLabel } = getPeriodAndDueDate(record.month, contract.start_date ?? null, contract.payment_day ?? 1);
+  // dueDateLabel formato: "DD/MM/YYYY"
+  if (!dueDateLabel || dueDateLabel === '-') return null;
+  const parts = dueDateLabel.split('/');
+  if (parts.length !== 3) return null;
+  return `${parts[2]}-${parts[1]}`; // YYYY-MM
+}
+
+function CondominiumModal({ open, onClose, initial }: { open: boolean; onClose: () => void; initial?: CondominiumDB }) {
   const addCond = useAddCondominium();
   const updateCond = useUpdateCondominium();
   const [name, setName] = useState(initial?.name ?? '');
-
   async function handleSave() {
     if (!name) return;
-    if (initial) {
-      await updateCond.mutateAsync({ id: initial.id, name });
-    } else {
-      await addCond.mutateAsync(name);
-    }
+    if (initial) { await updateCond.mutateAsync({ id: initial.id, name }); }
+    else { await addCond.mutateAsync(name); }
     onClose();
   }
-
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{initial ? 'Editar Condomínio' : 'Novo Condomínio'}</DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle>{initial ? 'Editar Condomínio' : 'Novo Condomínio'}</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div>
             <Label>Nome *</Label>
@@ -65,48 +65,38 @@ function CondominiumModal({ open, onClose, initial }: {
   );
 }
 
-// Detail modal for clickable cards with sorting and Condomínio column
 type ModalSortField = 'condo' | 'apt';
 type ModalSortDir = 'asc' | 'desc';
 
 function DetailModal({ open, onClose, title, records, tenants, apartments, condominiums, variant }: {
   open: boolean; onClose: () => void; title: string;
-  records: (FinancialRecordDB & { computedStatus: string })[];
-  tenants: { id: string; first_name: string; last_name: string }[];
-  apartments: { id: string; unit_number: string; condominium_id: string }[];
-  condominiums: { id: string; name: string }[];
+  records: (FinancialRecordDB & { computedStatus: string })[]; tenants: { id: string; first_name: string; last_name: string }[];
+  apartments: { id: string; unit_number: string; condominium_id: string }[]; condominiums: { id: string; name: string }[];
   variant: 'pending' | 'overdue' | 'received';
 }) {
   const [sortField, setSortField] = useState<ModalSortField | null>(null);
   const [sortDir, setSortDir] = useState<ModalSortDir>('asc');
   const { data: contracts = [] } = useContracts();
-
   function toggleSort(field: ModalSortField) {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDir('asc'); }
   }
-
   const enriched = records.map(r => {
     const apt = apartments.find(a => a.id === r.apartment_id);
     const condo = apt ? condominiums.find(c => c.id === apt.condominium_id) : null;
     return { ...r, apt, condo };
   });
-
   const sorted = sortField ? [...enriched].sort((a, b) => {
     let cmp = 0;
     if (sortField === 'condo') cmp = (a.condo?.name ?? '').localeCompare(b.condo?.name ?? '');
     else cmp = (a.apt?.unit_number ?? '').localeCompare(b.apt?.unit_number ?? '', undefined, { numeric: true });
     return sortDir === 'asc' ? cmp : -cmp;
   }) : enriched;
-
-  const lastColLabel = variant === 'pending' ? 'Data de Vencimento' : variant === 'overdue' ? 'Vencimento Inadimplente' : 'Data Pagamento';
-
+  const lastColLabel = variant === 'pending' ? 'Vencimento' : variant === 'overdue' ? 'Vencimento' : 'Data Pagamento';
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         {sorted.length === 0 ? (
           <p className="text-muted-foreground text-center py-8">Nenhum registro encontrado.</p>
         ) : (
@@ -132,15 +122,11 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
               <tbody>
                 {sorted.map(r => {
                   const t = tenants.find(t => t.id === r.tenant_id);
+                  const contract = contracts.find(ct => ct.id === r.contract_id);
                   let dateCol: string;
                   if (variant === 'received') {
                     dateCol = r.payment_date ?? '-';
-                  } else if (variant === 'overdue') {
-                    const contract = contracts.find(ct => ct.id === r.contract_id);
-                    const { dueDateLabel } = getPeriodAndDueDate(r.month, contract?.start_date ?? null, contract?.payment_day ?? 1);
-                    dateCol = dueDateLabel;
                   } else {
-                    const contract = contracts.find(ct => ct.id === r.contract_id);
                     const { dueDateLabel } = getPeriodAndDueDate(r.month, contract?.start_date ?? null, contract?.payment_day ?? 1);
                     dateCol = dueDateLabel;
                   }
@@ -182,52 +168,61 @@ export default function Dashboard() {
 
   const { selectedYear, selectedMonth } = state;
 
-  // Chart-specific filters
   const [chartYear, setChartYear] = useState(String(selectedYear));
   const [chartCondo, setChartCondo] = useState<string>('all');
 
-  // Enrich records with computed status
+  // Filtro de mês selecionado no formato YYYY-MM
+  const selectedMonthKey = selectedMonth !== null
+    ? `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`
+    : null;
+
+  // Enriquecer registros com contrato e status
   const enrichedRecords = financialRecords.map(r => {
     const contract = contracts.find(c => c.id === r.contract_id);
-    return { ...r, computedStatus: getStatus(r, contract?.payment_day) };
+    const status = getStatus(r, contract?.payment_day);
+    const dueDateMonth = getDueDateMonth(r, contract);
+    // Mês do pagamento efetivo (para receita recebida)
+    const paymentMonth = r.payment_date
+      ? r.payment_date.substring(0, 7) // YYYY-MM
+      : null;
+    return { ...r, computedStatus: status, dueDateMonth, paymentMonth };
   });
 
-  // Current month key for filtering
-  const now = new Date();
-  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
-  // Filtered records based on global filter (year/month)
-  const filteredRecords = enrichedRecords.filter(r => {
-    const [year, month] = r.month.split('-').map(Number);
-    return year === selectedYear && (selectedMonth === null || month - 1 === selectedMonth);
+  // Receita Recebida: filtrar pelo mês em que o pagamento foi feito (payment_date)
+  const receivedRecords = enrichedRecords.filter(r => {
+    if (!r.paid || !r.paymentMonth) return false;
+    if (selectedMonthKey) return r.paymentMonth === selectedMonthKey;
+    return r.paymentMonth.startsWith(String(selectedYear));
   });
 
-  // Card values - all scoped to the filtered period
-  const totalReceived = filteredRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
-  const totalPending = filteredRecords.filter(r => r.computedStatus === 'pending').reduce((s, r) => s + r.rent_value, 0);
-  // Inadimplente: only current filtered period, NOT all history
-  const totalOverdue = filteredRecords.filter(r => r.computedStatus === 'overdue').reduce((s, r) => s + r.rent_value, 0);
+  // A Receber: filtrar pelo mês de vencimento
+  const pendingRecords = enrichedRecords.filter(r => {
+    if (r.computedStatus !== 'pending') return false;
+    if (selectedMonthKey) return r.dueDateMonth === selectedMonthKey;
+    return r.dueDateMonth?.startsWith(String(selectedYear)) ?? false;
+  });
 
-  // Records for modals
-  const pendingRecords = filteredRecords.filter(r => r.computedStatus === 'pending');
-  const overdueRecords = filteredRecords.filter(r => r.computedStatus === 'overdue');
-  const receivedRecords = filteredRecords.filter(r => r.paid);
+  // Inadimplente: filtrar pelo mês de vencimento
+  const overdueRecords = enrichedRecords.filter(r => {
+    if (r.computedStatus !== 'overdue') return false;
+    if (selectedMonthKey) return r.dueDateMonth === selectedMonthKey;
+    return r.dueDateMonth?.startsWith(String(selectedYear)) ?? false;
+  });
 
-  // Grouped bar chart data
+  const totalReceived = receivedRecords.reduce((s, r) => s + r.rent_value, 0);
+  const totalPending = pendingRecords.reduce((s, r) => s + r.rent_value, 0);
+  const totalOverdue = overdueRecords.reduce((s, r) => s + r.rent_value, 0);
+
+  // Gráfico mensal
   const chartData = MONTHS.map((month, idx) => {
-    const monthRecords = enrichedRecords.filter(r => {
-      const [y, m] = r.month.split('-').map(Number);
-      const matchYear = y === Number(chartYear);
-      const matchMonth = m - 1 === idx;
-      const matchCondo = chartCondo === 'all' || apartments.find(a => a.id === r.apartment_id)?.condominium_id === chartCondo;
-      return matchYear && matchMonth && matchCondo;
-    });
-    return {
-      month: month.substring(0, 3),
-      receita: monthRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0),
-      aReceber: monthRecords.filter(r => r.computedStatus === 'pending').reduce((s, r) => s + r.rent_value, 0),
-      inadimplente: monthRecords.filter(r => r.computedStatus === 'overdue').reduce((s, r) => s + r.rent_value, 0),
-    };
+    const monthKey = `${chartYear}-${String(idx + 1).padStart(2, '0')}`;
+    const matchCondo = (r: typeof enrichedRecords[0]) =>
+      chartCondo === 'all' || apartments.find(a => a.id === r.apartment_id)?.condominium_id === chartCondo;
+
+    const rec = enrichedRecords.filter(r => r.paid && r.paymentMonth === monthKey && matchCondo(r)).reduce((s, r) => s + r.rent_value, 0);
+    const pend = enrichedRecords.filter(r => r.computedStatus === 'pending' && r.dueDateMonth === monthKey && matchCondo(r)).reduce((s, r) => s + r.rent_value, 0);
+    const over = enrichedRecords.filter(r => r.computedStatus === 'overdue' && r.dueDateMonth === monthKey && matchCondo(r)).reduce((s, r) => s + r.rent_value, 0);
+    return { month: month.substring(0, 3), receita: rec, aReceber: pend, inadimplente: over };
   });
 
   const filterLabel = selectedMonth !== null ? MONTHS[selectedMonth] : 'Ano';
@@ -242,7 +237,6 @@ export default function Dashboard() {
               <h1 className="text-xl md:text-2xl font-bold">Dashboard</h1>
               <p className="text-muted-foreground text-sm">Visão geral financeira e de imóveis</p>
             </div>
-            {/* Desktop */}
             <div className="hidden sm:flex items-center gap-2">
               <GlobalFilter />
               <Button onClick={() => setShowAdd(true)}>
@@ -250,7 +244,6 @@ export default function Dashboard() {
               </Button>
             </div>
           </div>
-          {/* Mobile: filtro + botão compacto */}
           <div className="flex items-center gap-2 sm:hidden">
             <div className="flex-1"><GlobalFilter /></div>
             <Button onClick={() => setShowAdd(true)} size="sm" className="shrink-0">
@@ -261,10 +254,7 @@ export default function Dashboard() {
 
         {/* Stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          <div
-            className="stat-card cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => setReceivedModal(true)}
-          >
+          <div className="stat-card cursor-pointer hover:shadow-md transition-shadow" onClick={() => setReceivedModal(true)}>
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">Receita Recebida</p>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--paid)/0.12)' }}>
@@ -272,12 +262,10 @@ export default function Dashboard() {
               </div>
             </div>
             <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(totalReceived)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes * {filterLabel} {selectedYear}</p>
+            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes · {filterLabel} {selectedYear}</p>
           </div>
-          <div
-            className="stat-card cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => setPendingModal(true)}
-          >
+
+          <div className="stat-card cursor-pointer hover:shadow-md transition-shadow" onClick={() => setPendingModal(true)}>
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">A Receber</p>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--warning)/0.12)' }}>
@@ -285,12 +273,10 @@ export default function Dashboard() {
               </div>
             </div>
             <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--warning))' }}>{formatCurrency(totalPending)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes * {filterLabel} {selectedYear}</p>
+            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes · {filterLabel} {selectedYear}</p>
           </div>
-          <div
-            className="stat-card cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => setOverdueModal(true)}
-          >
+
+          <div className="stat-card cursor-pointer hover:shadow-md transition-shadow" onClick={() => setOverdueModal(true)}>
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">Inadimplente</p>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--overdue)/0.12)' }}>
@@ -298,8 +284,9 @@ export default function Dashboard() {
               </div>
             </div>
             <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--overdue))' }}>{formatCurrency(totalOverdue)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes * {filterLabel} {selectedYear}</p>
+            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes · {filterLabel} {selectedYear}</p>
           </div>
+
           <div className="stat-card">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">Apartamentos</p>
@@ -337,10 +324,7 @@ export default function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-              <RechartsTooltip
-                formatter={(value: number) => formatCurrency(value)}
-                contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
-              />
+              <RechartsTooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="receita" name="Receita" fill="hsl(142, 71%, 45%)" radius={[3, 3, 0, 0]} />
               <Bar dataKey="aReceber" name="A Receber" fill="hsl(38, 92%, 50%)" radius={[3, 3, 0, 0]} />
@@ -366,13 +350,16 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {condominiums.map(cond => {
                 const condApts = apartments.filter(a => a.condominium_id === cond.id);
-                const condRecords = filteredRecords.filter(r =>
-                  condApts.some(a => a.id === r.apartment_id)
-                );
-                const condReceived = condRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
-
+                const condReceived = receivedRecords
+                  .filter(r => condApts.some(a => a.id === r.apartment_id))
+                  .reduce((s, r) => s + r.rent_value, 0);
                 return (
-                  <div key={cond.id} className="bg-card rounded-xl border border-border overflow-hidden hover:shadow-md transition-shadow">
+                  // CARD INTEIRO clicável
+                  <div
+                    key={cond.id}
+                    className="bg-card rounded-xl border border-border overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => navigate(`/condominiums/${cond.id}`)}
+                  >
                     <div className="p-5">
                       <div className="flex items-start justify-between mb-3">
                         <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -406,12 +393,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <div className="border-t border-border px-5 py-3">
-                      <button
-                        onClick={() => navigate(`/condominiums/${cond.id}`)}
-                        className="text-sm text-primary font-medium hover:underline flex items-center gap-1"
-                      >
-                        Ver apartamentos {'>'}
-                      </button>
+                      <span className="text-sm text-primary font-medium">Ver apartamentos &rsaquo;</span>
                     </div>
                   </div>
                 );
@@ -434,54 +416,16 @@ export default function Dashboard() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async () => {
-                await deleteCondo.mutateAsync(deleteCond!.id);
-                setDeleteCond(null);
-              }}
-              className="bg-destructive hover:bg-destructive/90"
-            >
+            <AlertDialogAction onClick={async () => { await deleteCondo.mutateAsync(deleteCond!.id); setDeleteCond(null); }} className="bg-destructive hover:bg-destructive/90">
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Pending Modal */}
-      <DetailModal
-        open={pendingModal}
-        onClose={() => setPendingModal(false)}
-        title={`A Receber - ${filterLabel} ${selectedYear}`}
-        records={pendingRecords}
-        tenants={allTenants}
-        apartments={apartments}
-        condominiums={condominiums}
-        variant="pending"
-      />
-
-      {/* Overdue Modal */}
-      <DetailModal
-        open={overdueModal}
-        onClose={() => setOverdueModal(false)}
-        title={`Inadimplentes - ${filterLabel} ${selectedYear}`}
-        records={overdueRecords}
-        tenants={allTenants}
-        apartments={apartments}
-        condominiums={condominiums}
-        variant="overdue"
-      />
-
-      {/* Received Modal */}
-      <DetailModal
-        open={receivedModal}
-        onClose={() => setReceivedModal(false)}
-        title={`Receita Recebida - ${filterLabel} ${selectedYear}`}
-        records={receivedRecords}
-        tenants={allTenants}
-        apartments={apartments}
-        condominiums={condominiums}
-        variant="received"
-      />
+      <DetailModal open={pendingModal} onClose={() => setPendingModal(false)} title={`A Receber - ${filterLabel} ${selectedYear}`} records={pendingRecords} tenants={allTenants} apartments={apartments} condominiums={condominiums} variant="pending" />
+      <DetailModal open={overdueModal} onClose={() => setOverdueModal(false)} title={`Inadimplentes - ${filterLabel} ${selectedYear}`} records={overdueRecords} tenants={allTenants} apartments={apartments} condominiums={condominiums} variant="overdue" />
+      <DetailModal open={receivedModal} onClose={() => setReceivedModal(false)} title={`Receita Recebida - ${filterLabel} ${selectedYear}`} records={receivedRecords} tenants={allTenants} apartments={apartments} condominiums={condominiums} variant="received" />
     </Layout>
   );
 }
