@@ -76,7 +76,7 @@ export default function VacancyIndex() {
 
   return (
     <Layout>
-      <div className="p-6 space-y-6">
+      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -106,7 +106,7 @@ export default function VacancyIndex() {
         ) : (
           <>
             {/* Cards resumo */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="stat-card">
                 <p className="text-xs text-muted-foreground mb-1">Taxa de Ocupação (mês atual)</p>
                 <p className="text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>
@@ -138,7 +138,7 @@ export default function VacancyIndex() {
             </div>
 
             {/* Histórico mensal */}
-            <div className="bg-card border border-border rounded-xl overflow-hidden">
+            <div className="bg-card border border-border rounded-xl overflow-x-auto">
               <div className="px-5 py-3 border-b border-border">
                 <h2 className="font-semibold">Histórico Mensal — {selectedYear}</h2>
               </div>
@@ -193,7 +193,7 @@ export default function VacancyIndex() {
             </div>
 
             {/* Por condomínio */}
-            <div className="bg-card border border-border rounded-xl overflow-hidden">
+            <div className="bg-card border border-border rounded-xl overflow-x-auto">
               <div className="px-5 py-3 border-b border-border">
                 <h2 className="font-semibold">Por Condomínio — {MONTHS[currentMonthIdx]}</h2>
               </div>
