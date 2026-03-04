@@ -6,21 +6,16 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useApp } from '@/lib/store';
-import { formatCurrency, MONTHS, YEARS, getPeriodAndDueDate } from '@/lib/utils-app';
+import { formatCurrency, MONTHS, YEARS, getPeriodAndDueDate, getRecordStatus } from '@/lib/utils-app';
 import { useFinancialRecords, useUpsertFinancialRecord, FinancialRecordDB } from '@/hooks/useFinancial';
 import { useContract } from '@/hooks/useContracts';
 import { useTenants } from '@/hooks/useTenants';
 import { useApartment } from '@/hooks/useApartments';
 import ReceiptModalDB from './ReceiptModalDB';
 
-function getStatus(record: FinancialRecordDB): 'paid' | 'overdue' | 'pending' {
+function getStatus(record: FinancialRecordDB, paymentDay?: number | null): 'paid' | 'overdue' | 'pending' {
   if (record.paid) return 'paid';
-  const today = new Date();
-  const [year, month] = record.month.split('-').map(Number);
-  if (year < today.getFullYear() || (year === today.getFullYear() && month < today.getMonth() + 1)) {
-    return 'overdue';
-  }
-  return 'pending';
+  return getRecordStatus(record.month, paymentDay);
 }
 
 export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tenantCpf }: {
@@ -144,7 +139,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
             </thead>
             <tbody>
               {filteredRecords.map(r => {
-                const st = getStatus(r);
+                const st = getStatus(r, paymentDay);
                 const { periodLabel, dueDateLabel } = getPeriodAndDueDate(r.month, contractStartDate, paymentDay);
                 return (
                   <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
