@@ -12,6 +12,7 @@ export interface TenantDB {
   email: string | null;
   phone: string | null;
   birth_date: string | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -27,13 +28,17 @@ export interface ResidentDB {
   created_at: string;
 }
 
+// Retorna apenas inquilinos ATIVOS (não arquivados) do apartamento
 export function useTenants(apartmentId?: string) {
   const { user } = useAuth();
-
   return useQuery({
     queryKey: ['tenants', apartmentId],
     queryFn: async () => {
-      let query = supabase.from('tenants').select('*').order('created_at', { ascending: false });
+      let query = supabase
+        .from('tenants')
+        .select('*')
+        .is('archived_at', null)            // ← apenas ativos
+        .order('created_at', { ascending: false });
       if (apartmentId) query = query.eq('apartment_id', apartmentId);
       const { data, error } = await query;
       if (error) throw error;
@@ -45,7 +50,6 @@ export function useTenants(apartmentId?: string) {
 
 export function useResidents(tenantId: string) {
   const { user } = useAuth();
-
   return useQuery({
     queryKey: ['residents', tenantId],
     queryFn: async () => {
@@ -63,12 +67,11 @@ export function useResidents(tenantId: string) {
 
 export function useAddTenant() {
   const qc = useQueryClient();
-
   return useMutation({
-    mutationFn: async (tenant: Omit<TenantDB, 'id' | 'created_at' | 'updated_at'>) => {
+    mutationFn: async (tenant: Omit<TenantDB, 'id' | 'created_at' | 'updated_at' | 'archived_at'>) => {
       const { data, error } = await supabase
         .from('tenants')
-        .insert(tenant)
+        .insert({ ...tenant, archived_at: null })
         .select()
         .single();
       if (error) throw error;
@@ -85,13 +88,9 @@ export function useAddTenant() {
 
 export function useUpdateTenant() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<TenantDB> & { id: string }) => {
-      const { error } = await supabase
-        .from('tenants')
-        .update(updates)
-        .eq('id', id);
+      const { error } = await supabase.from('tenants').update(updates).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -102,32 +101,25 @@ export function useUpdateTenant() {
   });
 }
 
+// Exclui permanentemente (apaga tudo — usado apenas dentro do apartamento)
 export function useDeleteTenant() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: async ({ id, apartmentId }: { id: string; apartmentId: string }) => {
-      // Hard delete: remove financial records, contracts, documents, residents, then tenant
-      // Delete financial records for this tenant
       await supabase.from('financial_records').delete().eq('tenant_id', id);
-      // Delete documents
       await supabase.from('documents').delete().eq('tenant_id', id);
-      // Delete residents
       await supabase.from('residents').delete().eq('tenant_id', id);
-      // Delete contracts
       await supabase.from('contracts').delete().eq('tenant_id', id);
-      // Delete tenant
       const { error } = await supabase.from('tenants').delete().eq('id', id);
       if (error) throw error;
       return apartmentId;
     },
     onSuccess: (apartmentId) => {
-      qc.invalidateQueries({ queryKey: ['tenants'] });
       qc.invalidateQueries({ queryKey: ['tenants', apartmentId] });
-      qc.invalidateQueries({ queryKey: ['financial_records'] });
+      qc.invalidateQueries({ queryKey: ['tenants'] });
+      qc.invalidateQueries({ queryKey: ['financial_records', apartmentId] });
       qc.invalidateQueries({ queryKey: ['financial_records_all'] });
-      qc.invalidateQueries({ queryKey: ['contracts_all'] });
-      toast.success('Inquilino excluído definitivamente!');
+      toast.success('Inquilino excluído!');
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -135,7 +127,6 @@ export function useDeleteTenant() {
 
 export function useDeletePreviousTenant() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('previous_tenants').delete().eq('id', id);
@@ -143,7 +134,7 @@ export function useDeletePreviousTenant() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['previous_tenants'] });
-      toast.success('Registro do histórico excluído!');
+      toast.success('Registro excluído do histórico!');
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -151,9 +142,17 @@ export function useDeletePreviousTenant() {
 
 export function useUpdatePreviousTenant() {
   const qc = useQueryClient();
-
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; first_name?: string; last_name?: string; cpf?: string | null; email?: string | null; phone?: string | null }) => {
+    mutationFn: async ({
+      id, ...updates
+    }: {
+      id: string;
+      first_name?: string;
+      last_name?: string;
+      cpf?: string | null;
+      email?: string | null;
+      phone?: string | null;
+    }) => {
       const { error } = await supabase.from('previous_tenants').update(updates).eq('id', id);
       if (error) throw error;
     },
@@ -167,14 +166,9 @@ export function useUpdatePreviousTenant() {
 
 export function useAddResident() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: async (resident: Omit<ResidentDB, 'id' | 'created_at'>) => {
-      const { data, error } = await supabase
-        .from('residents')
-        .insert(resident)
-        .select()
-        .single();
+      const { data, error } = await supabase.from('residents').insert(resident).select().single();
       if (error) throw error;
       return data;
     },
@@ -188,7 +182,6 @@ export function useAddResident() {
 
 export function useDeleteResident() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: async ({ id, tenantId }: { id: string; tenantId: string }) => {
       const { error } = await supabase.from('residents').delete().eq('id', id);
@@ -205,7 +198,6 @@ export function useDeleteResident() {
 
 export function usePreviousTenants(apartmentId: string) {
   const { user } = useAuth();
-
   return useQuery({
     queryKey: ['previous_tenants', apartmentId],
     queryFn: async () => {
