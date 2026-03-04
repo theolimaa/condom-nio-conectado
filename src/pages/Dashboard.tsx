@@ -15,6 +15,7 @@ import { useCondominiums, useAddCondominium, useUpdateCondominium, useDeleteCond
 import { useApartments } from '@/hooks/useApartments';
 import { useAllFinancialRecords, FinancialRecordDB } from '@/hooks/useFinancial';
 import { useContracts } from '@/hooks/useContracts';
+import { useContracts } from '@/hooks/useContracts';
 import { useTenants } from '@/hooks/useTenants';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
@@ -79,6 +80,7 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
 }) {
   const [sortField, setSortField] = useState<ModalSortField | null>(null);
   const [sortDir, setSortDir] = useState<ModalSortDir>('asc');
+  const { data: contracts = [] } = useContracts();
 
   function toggleSort(field: ModalSortField) {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
