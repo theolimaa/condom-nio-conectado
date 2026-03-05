@@ -197,15 +197,18 @@ export default function Dashboard() {
     : null;
 
   // Enriquecer registros com contrato e status
-  const enrichedRecords = financialRecords.map(r => {
+  // Ignora registros cujo mês é anterior ao início do contrato
+  const enrichedRecords = financialRecords.flatMap(r => {
     const contract = contracts.find(c => c.id === r.contract_id);
+    // Filtrar registros anteriores ao início do contrato
+    if (contract?.start_date) {
+      const contractStartMonth = contract.start_date.substring(0, 7); // YYYY-MM
+      if (r.month < contractStartMonth) return [];
+    }
     const status = getStatus(r, contract?.payment_day, contract?.start_date);
     const dueDateMonth = getDueDateMonth(r, contract);
-    // Mês do pagamento efetivo (para receita recebida)
-    const paymentMonth = r.payment_date
-      ? r.payment_date.substring(0, 7) // YYYY-MM
-      : null;
-    return { ...r, computedStatus: status, dueDateMonth, paymentMonth };
+    const paymentMonth = r.payment_date ? r.payment_date.substring(0, 7) : null;
+    return [{ ...r, computedStatus: status, dueDateMonth, paymentMonth }];
   });
 
   // Receita Recebida: filtrar pelo mês em que o pagamento foi feito (payment_date)
