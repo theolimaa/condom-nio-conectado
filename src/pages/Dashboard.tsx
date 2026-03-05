@@ -65,7 +65,7 @@ function CondominiumModal({ open, onClose, initial }: { open: boolean; onClose: 
   );
 }
 
-type ModalSortField = 'condo' | 'apt';
+type ModalSortField = 'condo' | 'apt' | 'date';
 type ModalSortDir = 'asc' | 'desc';
 
 function DetailModal({ open, onClose, title, records, tenants, apartments, condominiums, variant }: {
@@ -76,12 +76,21 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
 }) {
   const [sortField, setSortField] = useState<ModalSortField | null>(null);
   const [sortDir, setSortDir] = useState<ModalSortDir>('asc');
-  const [dateFilter, setDateFilter] = useState<string>('all');
   const { data: contracts = [] } = useContracts();
 
   function toggleSort(field: ModalSortField) {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDir('asc'); }
+  }
+
+  // Converte DD/MM/YYYY para YYYY-MM-DD para ordenação correta
+  function parseDateForSort(dateStr: string): string {
+    if (!dateStr || dateStr === '-') return '';
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+      const [d, m, y] = dateStr.split('/');
+      return `${y}-${m}-${d}`;
+    }
+    return dateStr; // já em YYYY-MM-DD
   }
 
   const enriched = records.map(r => {
@@ -98,17 +107,13 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
     return { ...r, apt, condo, dateCol };
   });
 
-  // Datas únicas para o filtro (formato DD/MM/YYYY ou YYYY-MM-DD)
-  const uniqueDates = Array.from(new Set(enriched.map(r => r.dateCol).filter(d => d && d !== '-'))).sort();
-
-  const filtered = dateFilter === 'all' ? enriched : enriched.filter(r => r.dateCol === dateFilter);
-
-  const sorted = sortField ? [...filtered].sort((a, b) => {
+  const sorted = sortField ? [...enriched].sort((a, b) => {
     let cmp = 0;
     if (sortField === 'condo') cmp = (a.condo?.name ?? '').localeCompare(b.condo?.name ?? '');
-    else cmp = (a.apt?.unit_number ?? '').localeCompare(b.apt?.unit_number ?? '', undefined, { numeric: true });
+    else if (sortField === 'apt') cmp = (a.apt?.unit_number ?? '').localeCompare(b.apt?.unit_number ?? '', undefined, { numeric: true });
+    else if (sortField === 'date') cmp = parseDateForSort(a.dateCol).localeCompare(parseDateForSort(b.dateCol));
     return sortDir === 'asc' ? cmp : -cmp;
-  }) : filtered;
+  }) : enriched;
 
   const lastColLabel = variant === 'received' ? 'Data Pagamento' : 'Vencimento';
 
@@ -116,24 +121,6 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
-
-        {/* Filtro de data */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground whitespace-nowrap">{lastColLabel}:</span>
-          <Select value={dateFilter} onValueChange={setDateFilter}>
-            <SelectTrigger className="h-8 text-xs w-48"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as datas</SelectItem>
-              {uniqueDates.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          {dateFilter !== 'all' && (
-            <button onClick={() => setDateFilter('all')} className="text-xs text-muted-foreground hover:text-foreground underline">
-              Limpar
-            </button>
-          )}
-        </div>
-
         {sorted.length === 0 ? (
           <p className="text-muted-foreground text-center py-8">Nenhum registro encontrado.</p>
         ) : (
@@ -153,7 +140,11 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
                   </th>
                   <th className="text-left px-3 py-2 font-medium text-muted-foreground">Inquilino</th>
                   <th className="text-right px-3 py-2 font-medium text-muted-foreground">Valor</th>
-                  <th className="text-center px-3 py-2 font-medium text-muted-foreground">{lastColLabel}</th>
+                  <th className="text-center px-3 py-2 font-medium text-muted-foreground">
+                    <button className="inline-flex items-center gap-1" onClick={() => toggleSort('date')}>
+                      {lastColLabel} <ArrowUpDown className={`w-3 h-3 ${sortField === 'date' ? 'text-primary' : 'text-muted-foreground/50'}`} />
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
