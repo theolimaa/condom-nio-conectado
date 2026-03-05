@@ -196,22 +196,26 @@ export default function Dashboard() {
     ? `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`
     : null;
 
-  // Enriquecer registros com contrato e status
-  // Ignora registros cujo mês é anterior ao início do contrato
+  // Mapa apartment_id → contrato ativo (do inquilino atual, sem archived_at)
+  // Resolve o caso de registros com contract_id=null ou tenant_id=null
+  const contractByApartment = new Map<string, typeof contracts[0]>();
+  for (const tenant of allTenants) {
+    if (!tenant.apartment_id) continue;
+    const c = contracts.find(ct => ct.tenant_id === tenant.id);
+    if (c) contractByApartment.set(tenant.apartment_id, c);
+  }
+
+  // Enriquecer registros e descartar os anteriores ao contrato atual
   const enrichedRecords = financialRecords.flatMap(r => {
-    // 1. Pelo contract_id direto
-    // 2. Pelo tenant_id do registro
-    // 3. Pelo inquilino ATUAL do apartamento (cobre registros com tenant_id=null ou de contrato antigo)
-    const currentTenant = allTenants.find(t => t.apartment_id === r.apartment_id);
     const contract =
-      contracts.find(c => c.id === r.contract_id) ??
-      (r.tenant_id ? contracts.find(c => c.tenant_id === r.tenant_id) : undefined) ??
-      (currentTenant ? contracts.find(c => c.tenant_id === currentTenant.id) : undefined);
-    // Filtrar registros anteriores ao início do contrato atual do apartamento
+      (r.contract_id ? contracts.find(c => c.id === r.contract_id) : undefined) ??
+      contractByApartment.get(r.apartment_id);
+
+    // Descarta meses anteriores ao início do contrato atual do apartamento
     if (contract?.start_date) {
-      const contractStartMonth = contract.start_date.substring(0, 7); // YYYY-MM
-      if (r.month < contractStartMonth) return [];
+      if (r.month < contract.start_date.substring(0, 7)) return [];
     }
+
     const status = getStatus(r, contract?.payment_day, contract?.start_date);
     const dueDateMonth = getDueDateMonth(r, contract);
     const paymentMonth = r.payment_date ? r.payment_date.substring(0, 7) : null;
