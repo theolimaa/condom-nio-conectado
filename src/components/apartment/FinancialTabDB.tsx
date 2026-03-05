@@ -37,7 +37,6 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
 
   const paymentDay = contract?.payment_day ?? 1;
   const contractStartDate = contract?.start_date ?? null;
-  const contractStartDate = contract?.start_date ?? null;
 
   const tenantRecords = records.filter(r => r.tenant_id === tenantId);
   const currentTenant = tenants.find(t => t.id === tenantId);
