@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, Download, X, Pencil } from 'lucide-react';
+import { FileText, Download, X, Pencil, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -13,55 +13,23 @@ import { useAuth } from '@/hooks/useAuth';
 import jsPDF from 'jspdf';
 
 interface Props {
-  open: boolean;
-  onClose: () => void;
-  record: FinancialRecordDB;
-  apartment: ApartmentDB;
-  tenant: TenantDB;
-  contract: ContractDB | null;
-  allRecords: FinancialRecordDB[];
-  condominiumName: string;
+  open: boolean; onClose: () => void; record: FinancialRecordDB;
+  apartment: ApartmentDB; tenant: TenantDB; contract: ContractDB | null;
+  allRecords: FinancialRecordDB[]; condominiumName: string;
 }
 
-
-// Campo de texto editável inline
 function EditableText({ value, onChange, multiline = false, className = '' }: {
-  value: string;
-  onChange: (v: string) => void;
-  multiline?: boolean;
-  className?: string;
+  value: string; onChange: (v: string) => void; multiline?: boolean; className?: string;
 }) {
   const [editing, setEditing] = useState(false);
-
   if (editing) {
     if (multiline) {
-      return (
-        <Textarea
-          autoFocus
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          onBlur={() => setEditing(false)}
-          className={`text-sm font-mono min-h-[60px] ${className}`}
-        />
-      );
+      return <Textarea autoFocus value={value} onChange={e => onChange(e.target.value)} onBlur={() => setEditing(false)} className={`text-sm font-mono min-h-[60px] ${className}`} />;
     }
-    return (
-      <Input
-        autoFocus
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        onBlur={() => setEditing(false)}
-        className={`h-7 text-sm font-mono ${className}`}
-      />
-    );
+    return <Input autoFocus value={value} onChange={e => onChange(e.target.value)} onBlur={() => setEditing(false)} className={`h-7 text-sm font-mono ${className}`} />;
   }
-
   return (
-    <span
-      className={`group relative cursor-pointer hover:bg-primary/10 rounded px-1 -mx-1 transition-colors ${className}`}
-      onClick={() => setEditing(true)}
-      title="Clique para editar"
-    >
+    <span className={`group relative cursor-pointer hover:bg-primary/10 rounded px-1 -mx-1 transition-colors ${className}`} onClick={() => setEditing(true)} title="Clique para editar">
       {value}
       <Pencil className="inline w-3 h-3 ml-1 opacity-0 group-hover:opacity-40 transition-opacity" />
     </span>
@@ -72,17 +40,11 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
   const { user } = useAuth();
   const [editableValues, setEditableValues] = useState<Record<string, number>>({});
 
-  // Gera código único do recibo: SIGLA + numAntes + AP + numDepois + DDMMAAAA
   function generateReceiptCode(): string {
-    const sigla = condominiumName
-      .split(/\s+/)
-      .map(w => w[0]?.toUpperCase() ?? '')
-      .join('');
+    const sigla = condominiumName.split(/\s+/).map(w => w[0]?.toUpperCase() ?? '').join('');
     const parts = apartment.unit_number.split('-');
     const numIndicativo = parts.length >= 2 ? parts[0] : '';
-    const apNum = parts.length >= 2
-      ? parts[1].padStart(2, '0')
-      : apartment.unit_number.padStart(2, '0');
+    const apNum = parts.length >= 2 ? parts[1].padStart(2, '0') : apartment.unit_number.padStart(2, '0');
     let dateStr = '';
     if (contract?.start_date) {
       const d = new Date(contract.start_date + 'T12:00:00');
@@ -94,29 +56,15 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
   }
 
   const receiptCode = generateReceiptCode();
-
-  // Caução
   const cautionText = contract?.caution_paid && contract.caution_value
     ? `Caução paga no valor de ${formatCurrency(contract.caution_value)}${contract.caution_date ? ` na data ${formatDate(contract.caution_date)}` : ''}.`
     : '';
 
-  // Textos editáveis
   const [title, setTitle] = useState('');
   const [mainText, setMainText] = useState('');
   const [cautionLine, setCautionLine] = useState('');
   const [historyTitle, setHistoryTitle] = useState('');
   const [footer, setFooter] = useState('');
-
-  useEffect(() => {
-    if (!open) return;
-    const periodLabel = getPeriodLabel(record.month);
-    const rentFormatted = formatCurrency(editableValues[record.id] ?? record.rent_value);
-    setTitle(`RECIBO — APTO ${apartment.unit_number} — ${tenant.first_name} ${tenant.last_name} — ${today}`);
-    setMainText(`Recebi de ${tenant.first_name} ${tenant.last_name}, CPF ${tenant.cpf || '—'} a importância de: ${rentFormatted} referente ao aluguel para o período de ${periodLabel}.`);
-    setCautionLine(cautionText);
-    setHistoryTitle(`Histórico do Ano ${recYear}`);
-    setFooter(`Fortaleza, ${today} — ${adminName} — Confira seu recibo.`);
-  }, [open]);
 
   const [recYear] = record.month.split('-').map(Number);
   const yearRecords = allRecords
@@ -136,11 +84,22 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
     return `${startDay}/${String(m).padStart(2, '0')}/${y} a ${startDay}/${String(nextM).padStart(2, '0')}/${nextY}`;
   }
 
-  function generatePDF() {
+  useEffect(() => {
+    if (!open) return;
+    const periodLabel = getPeriodLabel(record.month);
+    const rentFormatted = formatCurrency(editableValues[record.id] ?? record.rent_value);
+    setTitle(`RECIBO — APTO ${apartment.unit_number} — ${tenant.first_name} ${tenant.last_name} — ${today}`);
+    setMainText(`Recebi de ${tenant.first_name} ${tenant.last_name}, CPF ${tenant.cpf || '—'} a importância de: ${rentFormatted} referente ao aluguel para o período de ${periodLabel}.`);
+    setCautionLine(cautionText);
+    setHistoryTitle(`Histórico do Ano ${recYear}`);
+    setFooter(`Fortaleza, ${today} — ${adminName} — Confira seu recibo.`);
+  }, [open]);
+
+  // Gera o doc jsPDF e retorna como Uint8Array (sem chamar doc.save)
+  function buildPDF(): Uint8Array {
     const doc = new jsPDF();
     const ml = 20;
     let y = 20;
-
     const addText = (text: string, fontSize = 10, bold = false) => {
       doc.setFontSize(fontSize);
       doc.setFont('helvetica', bold ? 'bold' : 'normal');
@@ -148,31 +107,21 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
       doc.text(lines, ml, y);
       y += lines.length * (fontSize * 0.45) + 2;
     };
-
     const addLine = () => {
       doc.setDrawColor(200, 200, 200);
       doc.line(ml, y, 190, y);
       y += 4;
     };
-
     addText(receiptCode, 11, true);
     addText(title, 11, true);
     addLine();
     y += 2;
-
     addText(mainText, 10);
-
-    if (cautionLine) {
-      y += 2;
-      addText(cautionLine, 10);
-    }
-
+    if (cautionLine) { y += 2; addText(cautionLine, 10); }
     y += 4;
     addLine();
-
     addText(historyTitle, 11, true);
     y += 2;
-
     const cols = { periodo: 20, valor: 90, pagamento: 115, pago: 145, devendo: 170 };
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
@@ -182,10 +131,8 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
     doc.text('Pago', cols.pago, y);
     doc.text('Devendo', cols.devendo, y);
     y += 5;
-
     let totalPaid = 0;
     let totalOwed = 0;
-
     doc.setFont('helvetica', 'normal');
     yearRecords.forEach(r => {
       const val = editableValues[r.id] ?? r.rent_value;
@@ -193,7 +140,6 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
       const owed = !r.paid ? val : 0;
       totalPaid += paid;
       totalOwed += owed;
-
       doc.text(getPeriodLabel(r.month), cols.periodo, y);
       doc.text(formatCurrency(val), cols.valor, y);
       doc.text(r.payment_date ? formatDate(r.payment_date) : '—', cols.pagamento, y);
@@ -201,20 +147,49 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
       doc.text(owed > 0 ? formatCurrency(owed) : '—', cols.devendo, y);
       y += 5;
     });
-
     addLine();
     doc.setFont('helvetica', 'bold');
     doc.text(`Total Pago: ${formatCurrency(totalPaid)}`, cols.pago - 15, y);
     doc.text(`Devendo: ${formatCurrency(totalOwed)}`, cols.devendo - 5, y);
     y += 10;
-
     addLine();
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text(footer, ml, y);
-
-    doc.save(`Recibo-${receiptCode}.pdf`);
+    // Retorna bytes sem salvar
+    return doc.output('arraybuffer') as unknown as Uint8Array;
   }
+
+  // Baixar PDF normalmente
+  function handleDownload() {
+    const bytes = buildPDF();
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Recibo-${receiptCode}.pdf`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  // Compartilhar via Web Share API — SEM url, só o arquivo
+  async function handleShare() {
+    const bytes = buildPDF();
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const file = new File([blob], `Recibo-${receiptCode}.pdf`, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: `Recibo ${receiptCode}`,
+        // Sem "url" aqui — evita o blob URL no WhatsApp
+      });
+    } else {
+      // Fallback: baixar normalmente se Share API não suportada
+      handleDownload();
+    }
+  }
+
+  const canShare = typeof navigator !== 'undefined' && !!navigator.share;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -232,22 +207,12 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
           </p>
           <div className="border-b border-border pb-3 space-y-0.5">
             <p className="font-bold text-lg tracking-widest">{receiptCode}</p>
-            <p className="font-bold text-base">
-              <EditableText value={title} onChange={setTitle} />
-            </p>
+            <p className="font-bold text-base"><EditableText value={title} onChange={setTitle} /></p>
           </div>
-
-          <div>
-            <EditableText value={mainText} onChange={setMainText} multiline className="w-full" />
-          </div>
-
-          {/* Caução */}
+          <div><EditableText value={mainText} onChange={setMainText} multiline className="w-full" /></div>
           {(cautionLine || contract?.caution_paid) && (
-            <div className="text-sm">
-              <EditableText value={cautionLine} onChange={setCautionLine} multiline className="w-full" />
-            </div>
+            <div className="text-sm"><EditableText value={cautionLine} onChange={setCautionLine} multiline className="w-full" /></div>
           )}
-
           <div>
             <p className="font-bold mb-2 border-b border-border pb-1">
               <EditableText value={historyTitle} onChange={setHistoryTitle} />
@@ -269,20 +234,13 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
                     <tr key={r.id} className={`border-t border-border/50 ${r.id === record.id ? 'bg-primary/5' : ''}`}>
                       <td className="py-1">{getPeriodLabel(r.month)}</td>
                       <td className="text-right py-1">
-                        <Input
-                          type="number"
-                          value={val}
+                        <Input type="number" value={val}
                           onChange={e => setEditableValues({ ...editableValues, [r.id]: Number(e.target.value) })}
-                          className="h-6 w-24 text-xs text-right ml-auto"
-                        />
+                          className="h-6 w-24 text-xs text-right ml-auto" />
                       </td>
                       <td className="text-right py-1">{r.payment_date ? formatDate(r.payment_date) : '—'}</td>
-                      <td className="text-right py-1" style={{ color: 'hsl(var(--paid))' }}>
-                        {r.paid ? formatCurrency(val) : '—'}
-                      </td>
-                      <td className="text-right py-1" style={{ color: 'hsl(var(--overdue))' }}>
-                        {!r.paid ? formatCurrency(val) : '—'}
-                      </td>
+                      <td className="text-right py-1" style={{ color: 'hsl(var(--paid))' }}>{r.paid ? formatCurrency(val) : '—'}</td>
+                      <td className="text-right py-1" style={{ color: 'hsl(var(--overdue))' }}>{!r.paid ? formatCurrency(val) : '—'}</td>
                     </tr>
                   );
                 })}
@@ -300,7 +258,6 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
               </tfoot>
             </table>
           </div>
-
           <div className="border-t border-border pt-3 text-xs text-muted-foreground">
             <EditableText value={footer} onChange={setFooter} className="w-full" />
           </div>
@@ -310,7 +267,12 @@ export default function ReceiptModalDB({ open, onClose, record, apartment, tenan
           <Button variant="outline" onClick={onClose}>
             <X className="w-4 h-4 mr-2" /> Fechar
           </Button>
-          <Button onClick={generatePDF}>
+          {canShare && (
+            <Button variant="outline" onClick={handleShare}>
+              <Share2 className="w-4 h-4 mr-2" /> Compartilhar
+            </Button>
+          )}
+          <Button onClick={handleDownload}>
             <Download className="w-4 h-4 mr-2" /> Salvar e Baixar PDF
           </Button>
         </div>
