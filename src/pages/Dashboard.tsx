@@ -18,9 +18,9 @@ import { useContracts } from '@/hooks/useContracts';
 import { useTenants } from '@/hooks/useTenants';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 
-function getStatus(record: FinancialRecordDB, paymentDay?: number | null): 'paid' | 'overdue' | 'pending' {
+function getStatus(record: FinancialRecordDB, paymentDay?: number | null, contractStartDate?: string | null): 'paid' | 'overdue' | 'pending' {
   if (record.paid) return 'paid';
-  return getRecordStatus(record.month, paymentDay);
+  return getRecordStatus(record.month, paymentDay, contractStartDate);
 }
 
 // Extrai o mês (YYYY-MM) da data de vencimento de um registro
@@ -199,7 +199,7 @@ export default function Dashboard() {
   // Enriquecer registros com contrato e status
   const enrichedRecords = financialRecords.map(r => {
     const contract = contracts.find(c => c.id === r.contract_id);
-    const status = getStatus(r, contract?.payment_day);
+    const status = getStatus(r, contract?.payment_day, contract?.start_date);
     const dueDateMonth = getDueDateMonth(r, contract);
     // Mês do pagamento efetivo (para receita recebida)
     const paymentMonth = r.payment_date
