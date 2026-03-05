@@ -199,10 +199,10 @@ export default function Dashboard() {
   // Enriquecer registros com contrato e status
   // Ignora registros cujo mês é anterior ao início do contrato
   const enrichedRecords = financialRecords.flatMap(r => {
-    // Busca contrato pelo contract_id do registro, ou pelo apartment_id como fallback
+    // Busca contrato pelo contract_id do registro, ou pelo tenant_id como fallback
     const contract =
       contracts.find(c => c.id === r.contract_id) ??
-      contracts.find(c => c.apartment_id === r.apartment_id);
+      contracts.find(c => c.tenant_id === r.tenant_id);
     // Filtrar registros anteriores ao início do contrato
     if (contract?.start_date) {
       const contractStartMonth = contract.start_date.substring(0, 7); // YYYY-MM
