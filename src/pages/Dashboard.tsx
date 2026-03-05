@@ -199,11 +199,15 @@ export default function Dashboard() {
   // Enriquecer registros com contrato e status
   // Ignora registros cujo mês é anterior ao início do contrato
   const enrichedRecords = financialRecords.flatMap(r => {
-    // Busca contrato pelo contract_id do registro, ou pelo tenant_id como fallback
+    // 1. Pelo contract_id direto
+    // 2. Pelo tenant_id do registro
+    // 3. Pelo inquilino ATUAL do apartamento (cobre registros com tenant_id=null ou de contrato antigo)
+    const currentTenant = allTenants.find(t => t.apartment_id === r.apartment_id);
     const contract =
       contracts.find(c => c.id === r.contract_id) ??
-      contracts.find(c => c.tenant_id === r.tenant_id);
-    // Filtrar registros anteriores ao início do contrato
+      (r.tenant_id ? contracts.find(c => c.tenant_id === r.tenant_id) : undefined) ??
+      (currentTenant ? contracts.find(c => c.tenant_id === currentTenant.id) : undefined);
+    // Filtrar registros anteriores ao início do contrato atual do apartamento
     if (contract?.start_date) {
       const contractStartMonth = contract.start_date.substring(0, 7); // YYYY-MM
       if (r.month < contractStartMonth) return [];
