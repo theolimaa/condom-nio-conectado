@@ -76,27 +76,64 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
 }) {
   const [sortField, setSortField] = useState<ModalSortField | null>(null);
   const [sortDir, setSortDir] = useState<ModalSortDir>('asc');
+  const [dateFilter, setDateFilter] = useState<string>('all');
   const { data: contracts = [] } = useContracts();
+
   function toggleSort(field: ModalSortField) {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDir('asc'); }
   }
+
   const enriched = records.map(r => {
     const apt = apartments.find(a => a.id === r.apartment_id);
     const condo = apt ? condominiums.find(c => c.id === apt.condominium_id) : null;
-    return { ...r, apt, condo };
+    const contract = contracts.find(ct => ct.id === r.contract_id);
+    let dateCol: string;
+    if (variant === 'received') {
+      dateCol = r.payment_date ?? '-';
+    } else {
+      const { dueDateLabel } = getPeriodAndDueDate(r.month, contract?.start_date ?? null, contract?.payment_day ?? 1);
+      dateCol = dueDateLabel;
+    }
+    return { ...r, apt, condo, dateCol };
   });
-  const sorted = sortField ? [...enriched].sort((a, b) => {
+
+  // Datas únicas para o filtro (formato DD/MM/YYYY ou YYYY-MM-DD)
+  const uniqueDates = Array.from(new Set(enriched.map(r => r.dateCol).filter(d => d && d !== '-'))).sort();
+
+  const filtered = dateFilter === 'all' ? enriched : enriched.filter(r => r.dateCol === dateFilter);
+
+  const sorted = sortField ? [...filtered].sort((a, b) => {
     let cmp = 0;
     if (sortField === 'condo') cmp = (a.condo?.name ?? '').localeCompare(b.condo?.name ?? '');
     else cmp = (a.apt?.unit_number ?? '').localeCompare(b.apt?.unit_number ?? '', undefined, { numeric: true });
     return sortDir === 'asc' ? cmp : -cmp;
-  }) : enriched;
-  const lastColLabel = variant === 'pending' ? 'Vencimento' : variant === 'overdue' ? 'Vencimento' : 'Data Pagamento';
+  }) : filtered;
+
+  const lastColLabel = variant === 'received' ? 'Data Pagamento' : 'Vencimento';
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+
+        {/* Filtro de data */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground whitespace-nowrap">{lastColLabel}:</span>
+          <Select value={dateFilter} onValueChange={setDateFilter}>
+            <SelectTrigger className="h-8 text-xs w-48"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as datas</SelectItem>
+              {uniqueDates.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {dateFilter !== 'all' && (
+            <button onClick={() => setDateFilter('all')} className="text-xs text-muted-foreground hover:text-foreground underline">
+              Limpar
+            </button>
+          )}
+        </div>
+
         {sorted.length === 0 ? (
           <p className="text-muted-foreground text-center py-8">Nenhum registro encontrado.</p>
         ) : (
@@ -122,21 +159,13 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
               <tbody>
                 {sorted.map(r => {
                   const t = tenants.find(t => t.id === r.tenant_id);
-                  const contract = contracts.find(ct => ct.id === r.contract_id);
-                  let dateCol: string;
-                  if (variant === 'received') {
-                    dateCol = r.payment_date ?? '-';
-                  } else {
-                    const { dueDateLabel } = getPeriodAndDueDate(r.month, contract?.start_date ?? null, contract?.payment_day ?? 1);
-                    dateCol = dueDateLabel;
-                  }
                   return (
                     <tr key={r.id} className="border-b border-border last:border-0">
                       <td className="px-3 py-2">{r.condo?.name ?? '-'}</td>
                       <td className="px-3 py-2">{r.apt?.unit_number ?? '-'}</td>
                       <td className="px-3 py-2">{t ? `${t.first_name} ${t.last_name}` : '-'}</td>
                       <td className="px-3 py-2 text-right font-semibold">{formatCurrency(r.rent_value)}</td>
-                      <td className="px-3 py-2 text-center text-xs">{dateCol}</td>
+                      <td className="px-3 py-2 text-center text-xs">{r.dateCol}</td>
                     </tr>
                   );
                 })}
