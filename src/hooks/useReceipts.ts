@@ -172,14 +172,51 @@ export async function refreshReceiptUrl(
   return data.signedUrl;
 }
 
-// ─── Salvar em lote todos os recibos pagos ────────────────────────────────────
+/** Remove todos os recibos salvos anteriores a 2026 */
+export function useCleanupOldReceipts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      // Busca todos os recibos antigos
+      const { data: old, error } = await supabase
+        .from('saved_receipts')
+        .select('id, storage_path')
+        .lt('month', '2026-01');
+      if (error) throw error;
+      if (!old?.length) return 0;
+
+      // Remove do storage
+      const paths = old.map(r => r.storage_path).filter(Boolean);
+      if (paths.length) {
+        await supabase.storage.from(BUCKET).remove(paths);
+      }
+
+      // Remove do banco
+      const ids = old.map(r => r.id);
+      const { error: delError } = await supabase
+        .from('saved_receipts')
+        .delete()
+        .in('id', ids);
+      if (delError) throw delError;
+
+      return old.length;
+    },
+    onSuccess: (count) => {
+      qc.invalidateQueries({ queryKey: ['saved_receipts'] });
+      toast.success(`${count} recibo${count !== 1 ? 's' : ''} antigo${count !== 1 ? 's' : ''} removido${count !== 1 ? 's' : ''}!`);
+    },
+    onError: (e: Error) => toast.error(`Erro: ${e.message}`),
+  });
+}
+
+
 export function useBulkSaveReceipts() {
   const qc = useQueryClient();
   const { user } = useAuth();
 
   return useMutation({
     mutationFn: async () => {
-      // 1. Busca todos os registros pagos com joins
+      // 1. Busca registros pagos a partir de 2026 com joins
       const { data: paidRaw, error } = await (supabase as any)
         .from('financial_records')
         .select(
@@ -190,7 +227,8 @@ export function useBulkSaveReceipts() {
           contracts(id, payment_day, start_date, caution_paid, caution_value, caution_date)
         `
         )
-        .eq('paid', true);
+        .eq('paid', true)
+        .gte('month', '2026-01'); // Apenas 2026 em diante
 
       if (error) throw new Error(error.message);
       if (!paidRaw?.length) return { saved: 0, skipped: 0 };
