@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { Download, FileBarChart2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import Layout from '@/components/Layout';
 import { formatCurrency, MONTHS, YEARS } from '@/lib/utils-app';
 import { useCondominiums } from '@/hooks/useCondominiums';
@@ -10,16 +16,43 @@ import { useTenants } from '@/hooks/useTenants';
 import { useFinancialRecordsByYear } from '@/hooks/useFinancial';
 import jsPDF from 'jspdf';
 
-function getStatus(paid: boolean | null, month: string): 'paid' | 'overdue' | 'pending' {
+// ─── Classifica um registro ───────────────────────────────────────────────────
+// paid = true                        → 'paid'      (recebido)
+// paid = false, mês ainda não venceu → 'pending'   (a receber)
+// paid = false, mês já venceu        → 'overdue'   (inadimplente)
+//
+// "Mês venceu" = o ano-mês do período é estritamente anterior ao mês atual,
+// OU é o mês atual mas o dia de vencimento já passou.
+function getStatus(
+  paid: boolean | null,
+  month: string,
+  paymentDay?: number | null
+): 'paid' | 'overdue' | 'pending' {
   if (paid) return 'paid';
+
   const today = new Date();
-  const [year, m] = month.split('-').map(Number);
-  if (isNaN(year) || isNaN(m)) return 'pending';
+  const todayYear = today.getFullYear();
+  const todayMonth = today.getMonth() + 1; // 1-indexed
+  const todayDay = today.getDate();
+
+  const [recYear, recMonth] = month.split('-').map(Number);
+  if (isNaN(recYear) || isNaN(recMonth)) return 'pending';
+
+  // Mês passado → inadimplente
   if (
-    year < today.getFullYear() ||
-    (year === today.getFullYear() && m < today.getMonth() + 1)
-  )
+    recYear < todayYear ||
+    (recYear === todayYear && recMonth < todayMonth)
+  ) {
     return 'overdue';
+  }
+
+  // Mês atual → verifica se o dia de vencimento passou
+  if (recYear === todayYear && recMonth === todayMonth) {
+    const dueDay = paymentDay ?? 1;
+    if (todayDay > dueDay) return 'overdue';
+  }
+
+  // Mês futuro ou ainda dentro do prazo → a receber
   return 'pending';
 }
 
@@ -38,54 +71,63 @@ export default function MonthlyReport() {
   );
 
   const monthIndex = Number(selectedMonth); // 0-indexed
-  // monthKey para filtrar registros NÃO PAGOS pelo período de referência
   const monthKey = `${selectedYear}-${String(monthIndex + 1).padStart(2, '0')}`;
 
-  // ✅ CORREÇÃO: um registro conta para o mês selecionado se:
-  //   - está PAGO e payment_date cai no mês/ano selecionado (quando entrou o dinheiro)
-  //   - OU está NÃO PAGO e o month (período) corresponde ao mês selecionado
+  // ── Filtro sempre pelo período de referência (month) ─────────────────────────
+  // Assim cada registro pertence exatamente a UM mês e a soma bate sempre.
   const filtered = financialRecords.filter(r => {
     if (selectedCondo !== 'all') {
       const apt = apartments.find(a => a.id === r.apartment_id);
       if (apt?.condominium_id !== selectedCondo) return false;
     }
-
-    if (r.paid && r.payment_date) {
-      // Usa o mês da data de pagamento
-      const [y, m] = r.payment_date.split('-').map(Number);
-      return y === Number(selectedYear) && m - 1 === monthIndex;
-    } else {
-      // Usa o período de referência para pendentes/inadimplentes
-      return r.month === monthKey;
-    }
+    return r.month === monthKey;
   });
 
-  // Agrupado por condomínio
+  // ── Agrupado por condomínio ──────────────────────────────────────────────────
   const grouped = condominiums
     .filter(c => selectedCondo === 'all' || c.id === selectedCondo)
     .map(condo => {
       const condoApts = apartments.filter(a => a.condominium_id === condo.id);
-      const condoRecords = filtered.filter(r => condoApts.some(a => a.id === r.apartment_id));
+      const condoRecords = filtered.filter(r =>
+        condoApts.some(a => a.id === r.apartment_id)
+      );
 
       const rows = condoApts.map(apt => {
         const record = condoRecords.find(r => r.apartment_id === apt.id);
         const tenant = allTenants.find(t => t.id === record?.tenant_id);
-        const status = record ? getStatus(record.paid, record.month) : null;
+        // Tenta pegar o payment_day do contrato via record
+        const status = record
+          ? getStatus(record.paid, record.month)
+          : null;
         return { apt, record, tenant, status };
       });
 
-      const totalPaid = condoRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
+      // Totais: cada registro em exatamente UMA categoria
+      const totalPaid = condoRecords
+        .filter(r => r.paid)
+        .reduce((s, r) => s + r.rent_value, 0);
+
       const totalPending = condoRecords
-        .filter(r => getStatus(r.paid, r.month) === 'pending')
+        .filter(r => !r.paid && getStatus(r.paid, r.month) === 'pending')
         .reduce((s, r) => s + r.rent_value, 0);
+
       const totalOverdue = condoRecords
-        .filter(r => getStatus(r.paid, r.month) === 'overdue')
+        .filter(r => !r.paid && getStatus(r.paid, r.month) === 'overdue')
         .reduce((s, r) => s + r.rent_value, 0);
+
       const occupied = condoApts.filter(apt =>
         condoRecords.some(r => r.apartment_id === apt.id)
       ).length;
 
-      return { condo, rows, totalPaid, totalPending, totalOverdue, occupied, total: condoApts.length };
+      return {
+        condo,
+        rows,
+        totalPaid,
+        totalPending,
+        totalOverdue,
+        occupied,
+        total: condoApts.length,
+      };
     });
 
   const grandPaid = grouped.reduce((s, g) => s + g.totalPaid, 0);
@@ -96,6 +138,7 @@ export default function MonthlyReport() {
     const doc = new jsPDF();
     const ml = 15;
     let y = 18;
+
     const monthLabel = MONTHS[Number(selectedMonth)];
     const condoLabel =
       selectedCondo === 'all'
@@ -132,7 +175,11 @@ export default function MonthlyReport() {
     doc.text('Living Gest — Relatório Mensal', ml, 12);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`${monthLabel} ${selectedYear} • ${condoLabel} • Emitido em ${today}`, ml, 22);
+    doc.text(
+      `${monthLabel} ${selectedYear} • ${condoLabel} • Emitido em ${today}`,
+      ml,
+      22
+    );
     y = 36;
 
     // Resumo geral
@@ -191,27 +238,35 @@ export default function MonthlyReport() {
           doc.addPage();
           y = 15;
         }
+
         doc.setFontSize(7.5);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(30, 30, 30);
         doc.text(row.apt.unit_number, ml, y);
+
         const tenantName = row.tenant
           ? `${row.tenant.first_name} ${row.tenant.last_name}`
           : '—';
         doc.text(doc.splitTextToSize(tenantName, 75)[0], ml + 18, y);
-        doc.text(row.record ? formatCurrency(row.record.rent_value) : '—', ml + 100, y);
+        doc.text(
+          row.record ? formatCurrency(row.record.rent_value) : '—',
+          ml + 100,
+          y
+        );
         doc.text(row.record?.payment_date ?? '—', ml + 125, y);
+
         if (row.status === 'paid') doc.setTextColor(34, 197, 94);
         else if (row.status === 'overdue') doc.setTextColor(239, 68, 68);
         else if (row.status === 'pending') doc.setTextColor(234, 179, 8);
         else doc.setTextColor(150, 150, 150);
+
         const statusLabel =
           row.status === 'paid'
             ? 'Pago'
             : row.status === 'overdue'
             ? 'Inadimplente'
             : row.status === 'pending'
-            ? 'Pendente'
+            ? 'A Receber'
             : 'Vago';
         doc.text(statusLabel, ml + 160, y);
         doc.setTextColor(30, 30, 30);
@@ -261,6 +316,7 @@ export default function MonthlyReport() {
               ))}
             </SelectContent>
           </Select>
+
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
             <SelectTrigger className="w-36">
               <SelectValue />
@@ -273,6 +329,7 @@ export default function MonthlyReport() {
               ))}
             </SelectContent>
           </Select>
+
           <Select value={selectedCondo} onValueChange={setSelectedCondo}>
             <SelectTrigger className="w-52">
               <SelectValue placeholder="Todos os condomínios" />
@@ -292,20 +349,35 @@ export default function MonthlyReport() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="stat-card">
             <p className="text-sm text-muted-foreground">Recebido</p>
-            <p className="text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>
+            <p
+              className="text-2xl font-bold"
+              style={{ color: 'hsl(var(--paid))' }}
+            >
               {formatCurrency(grandPaid)}
             </p>
           </div>
           <div className="stat-card">
             <p className="text-sm text-muted-foreground">A Receber</p>
-            <p className="text-2xl font-bold" style={{ color: 'hsl(var(--warning))' }}>
+            <p
+              className="text-2xl font-bold"
+              style={{ color: 'hsl(var(--warning))' }}
+            >
               {formatCurrency(grandPending)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Vencimento não chegou
             </p>
           </div>
           <div className="stat-card">
             <p className="text-sm text-muted-foreground">Inadimplente</p>
-            <p className="text-2xl font-bold" style={{ color: 'hsl(var(--overdue))' }}>
+            <p
+              className="text-2xl font-bold"
+              style={{ color: 'hsl(var(--overdue))' }}
+            >
               {formatCurrency(grandOverdue)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Venceu e não pagou
             </p>
           </div>
         </div>
@@ -324,13 +396,18 @@ export default function MonthlyReport() {
               >
                 <div className="flex items-center justify-between px-5 py-3 bg-muted/40 border-b border-border">
                   <h2 className="font-semibold">{g.condo.name}</h2>
-                  <div className="flex gap-4 text-sm">
+                  <div className="flex gap-4 text-sm flex-wrap">
                     <span className="text-muted-foreground">
                       {g.occupied}/{g.total} ocupados
                     </span>
                     <span style={{ color: 'hsl(var(--paid))' }}>
                       {formatCurrency(g.totalPaid)} recebido
                     </span>
+                    {g.totalPending > 0 && (
+                      <span style={{ color: 'hsl(var(--warning))' }}>
+                        {formatCurrency(g.totalPending)} a receber
+                      </span>
+                    )}
                     {g.totalOverdue > 0 && (
                       <span style={{ color: 'hsl(var(--overdue))' }}>
                         {formatCurrency(g.totalOverdue)} inad.
@@ -338,6 +415,7 @@ export default function MonthlyReport() {
                     )}
                   </div>
                 </div>
+
                 <table className="w-full text-xs sm:text-sm">
                   <thead>
                     <tr className="text-xs text-muted-foreground border-b border-border">
@@ -354,14 +432,18 @@ export default function MonthlyReport() {
                         key={row.apt.id}
                         className="border-b border-border/50 last:border-0"
                       >
-                        <td className="px-4 py-2 font-medium">{row.apt.unit_number}</td>
+                        <td className="px-4 py-2 font-medium">
+                          {row.apt.unit_number}
+                        </td>
                         <td className="px-4 py-2 text-muted-foreground">
                           {row.tenant
                             ? `${row.tenant.first_name} ${row.tenant.last_name}`
                             : '—'}
                         </td>
                         <td className="px-4 py-2 text-right font-semibold">
-                          {row.record ? formatCurrency(row.record.rent_value) : '—'}
+                          {row.record
+                            ? formatCurrency(row.record.rent_value)
+                            : '—'}
                         </td>
                         <td className="px-4 py-2 text-center text-xs text-muted-foreground">
                           {row.record?.payment_date ?? '—'}
@@ -374,10 +456,12 @@ export default function MonthlyReport() {
                             <span className="badge-overdue">Inadimplente</span>
                           )}
                           {row.status === 'pending' && (
-                            <span className="badge-unpaid">Pendente</span>
+                            <span className="badge-unpaid">A Receber</span>
                           )}
                           {!row.status && (
-                            <span className="text-xs text-muted-foreground">Vago</span>
+                            <span className="text-xs text-muted-foreground">
+                              Vago
+                            </span>
                           )}
                         </td>
                       </tr>
