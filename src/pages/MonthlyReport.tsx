@@ -91,11 +91,6 @@ export default function MonthlyReport() {
         condoApts.some(a => a.id === r.apartment_id)
       );
 
-      // Determina o mês/ano do período selecionado para checar contratos ativos
-      const periodYear = Number(selectedYear);
-      const periodMonth = monthIndex + 1; // 1-indexed
-      const periodStart = `${periodYear}-${String(periodMonth).padStart(2, "0")}-01`;
-
       const rows = condoApts.map(apt => {
         const record = condoRecords.find(r => r.apartment_id === apt.id);
         const tenant = allTenants.find(t => t.id === record?.tenant_id);
@@ -104,16 +99,10 @@ export default function MonthlyReport() {
           return { apt, record, tenant, status: record.computedStatus, isVacant: false };
         }
 
-        // Sem registro: verifica se existe contrato ativo nesse apartamento no período
-        const hasActiveContract = contracts.some(c => {
-          if (c.apartment_id !== apt.id) return false;
-          if (!c.start_date) return false;
-          if (c.start_date > periodStart) return false;
-          if (c.end_date && c.end_date < periodStart) return false;
-          return true;
-        });
+        // Sem registro: vago = não tem nenhum tenant ativo (não arquivado) no apartamento
+        const hasActiveTenant = allTenants.some(t => t.apartment_id === apt.id && !t.archived_at);
 
-        return { apt, record: null, tenant: null, status: null, isVacant: !hasActiveContract };
+        return { apt, record: null, tenant: null, status: null, isVacant: !hasActiveTenant };
       });
 
       const totalPaid = condoRecords.filter(r => r.computedStatus === 'paid').reduce((s, r) => s + r.rent_value, 0);
