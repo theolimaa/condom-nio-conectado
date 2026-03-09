@@ -1,22 +1,60 @@
 import { useState } from 'react';
-import { TrendingUp, DollarSign, TrendingDown, CheckCircle, AlertCircle, Receipt, Loader2, ArrowUpDown } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  TrendingUp,
+  DollarSign,
+  TrendingDown,
+  CheckCircle,
+  AlertCircle,
+  Receipt,
+  Loader2,
+  ArrowUpDown,
+} from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { formatCurrency, MONTHS, YEARS, getPeriodAndDueDate, getRecordStatus } from '@/lib/utils-app';
+import {
+  formatCurrency,
+  MONTHS,
+  YEARS,
+  getPeriodAndDueDate,
+  getRecordStatus,
+} from '@/lib/utils-app';
 import Layout from '@/components/Layout';
 import { useCondominiums } from '@/hooks/useCondominiums';
 import { useApartments } from '@/hooks/useApartments';
 import { useTenants } from '@/hooks/useTenants';
-import { useAllFinancialRecords, useUpsertFinancialRecord, FinancialRecordDB } from '@/hooks/useFinancial';
+import {
+  useAllFinancialRecords,
+  useUpsertFinancialRecord,
+  FinancialRecordDB,
+} from '@/hooks/useFinancial';
 import { useContracts } from '@/hooks/useContracts';
 import ReceiptModalDB from '@/components/apartment/ReceiptModalDB';
 
-function getStatus(record: FinancialRecordDB, paymentDay?: number | null): 'paid' | 'overdue' | 'pending' {
+// ─── Status de um registro ────────────────────────────────────────────────────
+// paid=true       → 'paid'
+// paid=false, mês passou a data de vencimento → 'overdue'  (inadimplente)
+// paid=false, mês ainda não venceu           → 'pending'   (a receber)
+function getStatus(
+  record: FinancialRecordDB,
+  paymentDay?: number | null
+): 'paid' | 'overdue' | 'pending' {
   if (record.paid) return 'paid';
   return getRecordStatus(record.month, paymentDay);
 }
 
-type SortField = 'condo' | 'apt' | 'tenant' | 'period' | 'status' | 'payment_date';
+type SortField =
+  | 'condo'
+  | 'apt'
+  | 'tenant'
+  | 'period'
+  | 'status'
+  | 'payment_date';
 type SortDir = 'asc' | 'desc';
 
 export default function Financial() {
@@ -31,7 +69,9 @@ export default function Financial() {
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [filterCondo, setFilterCondo] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [receiptRecord, setReceiptRecord] = useState<FinancialRecordDB | null>(null);
+  const [receiptRecord, setReceiptRecord] = useState<FinancialRecordDB | null>(
+    null
+  );
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -44,7 +84,7 @@ export default function Financial() {
     }
   }
 
-  // Build enriched records
+  // ── Enriquecer registros com dados relacionados ──────────────────────────────
   const enriched = financialRecords.map(r => {
     const apt = apartments.find(a => a.id === r.apartment_id);
     const condo = apt ? condominiums.find(c => c.id === apt.condominium_id) : null;
@@ -54,20 +94,12 @@ export default function Financial() {
     return { ...r, apt, condo, tenant, contract, computedStatus: status };
   });
 
-  // ✅ CORREÇÃO: filtrar por payment_date quando pago, por month quando não pago
-  // A lógica: "pagamento realizado em março" → usar payment_date para mês/ano do filtro
+  // ── Filtro por período de referência (month) ─────────────────────────────────
+  // Sempre usamos `month` para filtrar — assim um registro nunca aparece
+  // em dois meses ao mesmo tempo e a soma Recebido+AReceber+Inadimplente
+  // bate exatamente com o total do mês.
   let filtered = enriched.filter(r => {
-    // Determina o mês/ano a usar para o filtro:
-    // - Se pago: usa payment_date (quando o dinheiro efetivamente entrou)
-    // - Se não pago: usa month (período de referência, para mostrar pendentes do mês)
-    let filterDate: string;
-    if (r.paid && r.payment_date) {
-      filterDate = r.payment_date; // YYYY-MM-DD
-    } else {
-      filterDate = r.month + '-01'; // YYYY-MM → YYYY-MM-01
-    }
-
-    const [y, m] = filterDate.split('-').map(Number);
+    const [y, m] = r.month.split('-').map(Number);
     if (y !== Number(filterYear)) return false;
     if (filterMonth !== 'all' && m - 1 !== Number(filterMonth)) return false;
     if (filterCondo !== 'all' && r.condo?.id !== filterCondo) return false;
@@ -79,7 +111,7 @@ export default function Financial() {
     return true;
   });
 
-  // Sort
+  // ── Ordenação ────────────────────────────────────────────────────────────────
   if (sortField) {
     filtered = [...filtered].sort((a, b) => {
       let cmp = 0;
@@ -88,13 +120,19 @@ export default function Financial() {
           cmp = (a.condo?.name ?? '').localeCompare(b.condo?.name ?? '');
           break;
         case 'apt':
-          cmp = (a.apt?.unit_number ?? '').localeCompare(b.apt?.unit_number ?? '', undefined, {
-            numeric: true,
-          });
+          cmp = (a.apt?.unit_number ?? '').localeCompare(
+            b.apt?.unit_number ?? '',
+            undefined,
+            { numeric: true }
+          );
           break;
         case 'tenant': {
-          const na = a.tenant ? `${a.tenant.first_name} ${a.tenant.last_name}` : '';
-          const nb = b.tenant ? `${b.tenant.first_name} ${b.tenant.last_name}` : '';
+          const na = a.tenant
+            ? `${a.tenant.first_name} ${a.tenant.last_name}`
+            : '';
+          const nb = b.tenant
+            ? `${b.tenant.first_name} ${b.tenant.last_name}`
+            : '';
           cmp = na.localeCompare(nb);
           break;
         }
@@ -114,8 +152,18 @@ export default function Financial() {
     filtered.sort((a, b) => a.month.localeCompare(b.month));
   }
 
-  const totalToReceive = filtered.filter(r => !r.paid).reduce((s, r) => s + r.rent_value, 0);
-  const totalReceived = filtered.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
+  // ── Totalizadores: cada registro pertence a UMA categoria ────────────────────
+  // Recebido    = pagos (paid = true)
+  // A Receber   = não pagos e ainda dentro do prazo (pending)
+  // Inadimplente= não pagos e já passou o vencimento (overdue)
+  const totalReceived = filtered
+    .filter(r => r.computedStatus === 'paid')
+    .reduce((s, r) => s + r.rent_value, 0);
+
+  const totalToReceive = filtered
+    .filter(r => r.computedStatus === 'pending')
+    .reduce((s, r) => s + r.rent_value, 0);
+
   const totalOverdue = filtered
     .filter(r => r.computedStatus === 'overdue')
     .reduce((s, r) => s + r.rent_value, 0);
@@ -153,7 +201,13 @@ export default function Financial() {
     ? condominiums.find(c => c.id === receiptApt.condominium_id)
     : null;
 
-  function SortHeader({ field, children }: { field: SortField; children: React.ReactNode }) {
+  function SortHeader({
+    field,
+    children,
+  }: {
+    field: SortField;
+    children: React.ReactNode;
+  }) {
     return (
       <button
         className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
@@ -162,7 +216,9 @@ export default function Financial() {
         {children}
         <ArrowUpDown
           className={`w-3 h-3 ${
-            sortField === field ? 'text-primary' : 'text-muted-foreground/50'
+            sortField === field
+              ? 'text-primary'
+              : 'text-muted-foreground/50'
           }`}
         />
       </button>
@@ -174,36 +230,25 @@ export default function Financial() {
       <div className="p-4 md:p-6 space-y-4 md:space-y-6">
         <div>
           <h1 className="text-xl md:text-2xl font-bold">Financeiro</h1>
-          <p className="text-muted-foreground text-sm">Painel de controle de recebimentos</p>
+          <p className="text-muted-foreground text-sm">
+            Painel de controle de recebimentos
+          </p>
         </div>
 
         {/* Summary cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+          {/* Recebido */}
           <div className="stat-card">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-muted-foreground">Total a Receber</p>
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: 'hsl(var(--warning)/0.12)' }}
-              >
-                <DollarSign className="w-4 h-4" style={{ color: 'hsl(var(--warning))' }} />
-              </div>
-            </div>
-            <p
-              className="text-xl md:text-2xl font-bold"
-              style={{ color: 'hsl(var(--warning))' }}
-            >
-              {formatCurrency(totalToReceive)}
-            </p>
-          </div>
-          <div className="stat-card">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-muted-foreground">Total Recebido</p>
+              <p className="text-sm text-muted-foreground">Recebido</p>
               <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
                 style={{ background: 'hsl(var(--paid)/0.12)' }}
               >
-                <TrendingUp className="w-4 h-4" style={{ color: 'hsl(var(--paid))' }} />
+                <TrendingUp
+                  className="w-4 h-4"
+                  style={{ color: 'hsl(var(--paid))' }}
+                />
               </div>
             </div>
             <p
@@ -213,14 +258,44 @@ export default function Financial() {
               {formatCurrency(totalReceived)}
             </p>
           </div>
+
+          {/* A Receber */}
           <div className="stat-card">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-muted-foreground">Total Inadimplente</p>
+              <p className="text-sm text-muted-foreground">A Receber</p>
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ background: 'hsl(var(--warning)/0.12)' }}
+              >
+                <DollarSign
+                  className="w-4 h-4"
+                  style={{ color: 'hsl(var(--warning))' }}
+                />
+              </div>
+            </div>
+            <p
+              className="text-xl md:text-2xl font-bold"
+              style={{ color: 'hsl(var(--warning))' }}
+            >
+              {formatCurrency(totalToReceive)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Vencimento não chegou
+            </p>
+          </div>
+
+          {/* Inadimplente */}
+          <div className="stat-card">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm text-muted-foreground">Inadimplente</p>
               <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
                 style={{ background: 'hsl(var(--overdue)/0.12)' }}
               >
-                <TrendingDown className="w-4 h-4" style={{ color: 'hsl(var(--overdue))' }} />
+                <TrendingDown
+                  className="w-4 h-4"
+                  style={{ color: 'hsl(var(--overdue))' }}
+                />
               </div>
             </div>
             <p
@@ -229,10 +304,13 @@ export default function Financial() {
             >
               {formatCurrency(totalOverdue)}
             </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Venceu e não pagou
+            </p>
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Filtros */}
         <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
           <Select value={filterYear} onValueChange={setFilterYear}>
             <SelectTrigger className="w-24 h-9 text-sm">
@@ -246,6 +324,7 @@ export default function Financial() {
               ))}
             </SelectContent>
           </Select>
+
           <Select value={filterMonth} onValueChange={setFilterMonth}>
             <SelectTrigger className="w-36 h-9 text-sm">
               <SelectValue />
@@ -259,6 +338,7 @@ export default function Financial() {
               ))}
             </SelectContent>
           </Select>
+
           <Select value={filterCondo} onValueChange={setFilterCondo}>
             <SelectTrigger className="w-44 h-9 text-sm">
               <SelectValue />
@@ -272,6 +352,7 @@ export default function Financial() {
               ))}
             </SelectContent>
           </Select>
+
           <Select value={filterStatus} onValueChange={setFilterStatus}>
             <SelectTrigger className="w-36 h-9 text-sm">
               <SelectValue />
@@ -279,13 +360,13 @@ export default function Financial() {
             <SelectContent>
               <SelectItem value="all">Todos status</SelectItem>
               <SelectItem value="paid">Pago</SelectItem>
-              <SelectItem value="pending">Pendente</SelectItem>
+              <SelectItem value="pending">A Receber</SelectItem>
               <SelectItem value="overdue">Inadimplente</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        {/* Master table */}
+        {/* Tabela mestre */}
         {isLoading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -345,30 +426,39 @@ export default function Financial() {
                       className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
                     >
                       <td className="px-4 py-3">{r.condo?.name ?? '—'}</td>
-                      <td className="px-4 py-3 font-medium">{r.apt?.unit_number ?? '—'}</td>
+                      <td className="px-4 py-3 font-medium">
+                        {r.apt?.unit_number ?? '—'}
+                      </td>
                       <td className="px-4 py-3">
                         {r.tenant
                           ? `${r.tenant.first_name} ${r.tenant.last_name}`
                           : '—'}
                       </td>
                       <td className="px-4 py-3 text-xs">{periodLabel}</td>
-                      <td className="px-4 py-3 text-center text-xs">{dueDateLabel}</td>
+                      <td className="px-4 py-3 text-center text-xs">
+                        {dueDateLabel}
+                      </td>
                       <td className="px-4 py-3 text-right font-semibold">
                         {formatCurrency(r.rent_value)}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <button onClick={() => togglePaid(r)} className="cursor-pointer">
+                        <button
+                          onClick={() => togglePaid(r)}
+                          className="cursor-pointer"
+                        >
                           {r.computedStatus === 'paid' && (
                             <span className="badge-paid">
-                              <CheckCircle className="w-3 h-3" /> Pago
+                              <CheckCircle className="w-3 h-3" />
+                              Pago
                             </span>
                           )}
                           {r.computedStatus === 'pending' && (
-                            <span className="badge-unpaid">Pendente</span>
+                            <span className="badge-unpaid">A Receber</span>
                           )}
                           {r.computedStatus === 'overdue' && (
                             <span className="badge-overdue">
-                              <AlertCircle className="w-3 h-3" /> Inadimplente
+                              <AlertCircle className="w-3 h-3" />
+                              Inadimplente
                             </span>
                           )}
                         </button>
@@ -378,7 +468,9 @@ export default function Financial() {
                           type="date"
                           className="h-7 w-36 text-xs mx-auto"
                           value={r.payment_date ?? ''}
-                          onChange={e => updatePaymentDate(r, e.target.value)}
+                          onChange={e =>
+                            updatePaymentDate(r, e.target.value)
+                          }
                         />
                       </td>
                       <td className="px-4 py-3 text-center">
