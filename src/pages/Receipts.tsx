@@ -9,8 +9,7 @@ import {
   ChevronDown,
   Search,
   SaveAll,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
+} from 'lucide-react';import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -35,6 +34,7 @@ import {
   useSavedReceipts,
   useDeleteSavedReceipt,
   useBulkSaveReceipts,
+  useCleanupOldReceipts,
   refreshReceiptUrl,
   SavedReceipt,
 } from '@/hooks/useReceipts';
@@ -166,6 +166,7 @@ export default function Receipts() {
   const { data: condominiums = [] } = useCondominiums();
   const deleteReceipt = useDeleteSavedReceipt();
   const bulkSave = useBulkSaveReceipts();
+  const cleanupOld = useCleanupOldReceipts();
 
   const [filterYear, setFilterYear] = useState<string>('all');
   const [filterMonth, setFilterMonth] = useState<string>('all');
@@ -173,6 +174,7 @@ export default function Receipts() {
   const [search, setSearch] = useState('');
   const [toDelete, setToDelete] = useState<SavedReceipt | null>(null);
   const [confirmBulk, setConfirmBulk] = useState(false);
+  const [confirmCleanup, setConfirmCleanup] = useState(false);
 
   // Filtrar recibos
   const filtered = useMemo(() => {
@@ -243,19 +245,34 @@ export default function Receipts() {
           </div>
 
           {/* Botão salvar todos */}
-          <Button
-            variant="outline"
-            onClick={() => setConfirmBulk(true)}
-            disabled={bulkSave.isPending}
-            className="shrink-0"
-          >
-            {bulkSave.isPending ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <SaveAll className="w-4 h-4 mr-2" />
-            )}
-            {bulkSave.isPending ? 'Salvando...' : 'Salvar todos os recibos pagos'}
-          </Button>
+          <div className="flex gap-2 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setConfirmCleanup(true)}
+              disabled={cleanupOld.isPending}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10 text-xs"
+            >
+              {cleanupOld.isPending ? (
+                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+              ) : (
+                <Trash2 className="w-3 h-3 mr-1" />
+              )}
+              Limpar anteriores a 2026
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmBulk(true)}
+              disabled={bulkSave.isPending}
+            >
+              {bulkSave.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <SaveAll className="w-4 h-4 mr-2" />
+              )}
+              {bulkSave.isPending ? 'Salvando...' : 'Salvar todos os recibos pagos'}
+            </Button>
+          </div>
         </div>
 
         {/* Filtros */}
@@ -355,7 +372,7 @@ export default function Receipts() {
             <AlertDialogTitle>Salvar todos os recibos pagos</AlertDialogTitle>
             <AlertDialogDescription>
               Isso irá gerar e salvar PDFs de todos os registros financeiros
-              marcados como <strong>pagos</strong> em todos os condomínios.
+              marcados como <strong>pagos a partir de Janeiro de 2026</strong>.
               Recibos que já existem não serão sobrescritos. Pode levar alguns
               minutos dependendo do volume.
             </AlertDialogDescription>
@@ -369,6 +386,31 @@ export default function Receipts() {
               }}
             >
               Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm cleanup old receipts */}
+      <AlertDialog open={confirmCleanup} onOpenChange={setConfirmCleanup}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover recibos anteriores a 2026</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso irá excluir permanentemente todos os recibos salvos com data
+              anterior a Janeiro de 2026. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmCleanup(false);
+                cleanupOld.mutate();
+              }}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Remover
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
