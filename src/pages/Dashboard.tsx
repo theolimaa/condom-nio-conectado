@@ -18,15 +18,21 @@ import { useContracts } from '@/hooks/useContracts';
 import { useTenants } from '@/hooks/useTenants';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 
-function getStatus(record: FinancialRecordDB, paymentDay?: number | null, contractStartDate?: string | null): 'paid' | 'overdue' | 'pending' {
+function getStatus(
+  record: FinancialRecordDB,
+  paymentDay?: number | null,
+  contractStartDate?: string | null,
+  desiredPaymentDay?: number | null,
+  desiredPaymentDate?: string | null
+): 'paid' | 'overdue' | 'pending' {
   if (record.paid) return 'paid';
-  return getRecordStatus(record.month, paymentDay, contractStartDate);
+  return getRecordStatus(record.month, paymentDay, contractStartDate, desiredPaymentDay, desiredPaymentDate);
 }
 
 // Extrai o mês (YYYY-MM) da data de vencimento de um registro
-function getDueDateMonth(record: FinancialRecordDB, contract?: { start_date?: string | null; payment_day?: number | null } | null): string | null {
+function getDueDateMonth(record: FinancialRecordDB, contract?: { start_date?: string | null; payment_day?: number | null; desired_payment_day?: number | null; desired_payment_date?: string | null } | null): string | null {
   if (!contract) return null;
-  const { dueDateLabel } = getPeriodAndDueDate(record.month, contract.start_date ?? null, contract.payment_day ?? 1);
+  const { dueDateLabel } = getPeriodAndDueDate(record.month, contract.start_date ?? null, contract.payment_day ?? 1, contract.desired_payment_day, contract.desired_payment_date);
   // dueDateLabel formato: "DD/MM/YYYY"
   if (!dueDateLabel || dueDateLabel === '-') return null;
   const parts = dueDateLabel.split('/');
@@ -101,7 +107,7 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
     if (variant === 'received') {
       dateCol = r.payment_date ?? '-';
     } else {
-      const { dueDateLabel } = getPeriodAndDueDate(r.month, contract?.start_date ?? null, contract?.payment_day ?? 1);
+      const { dueDateLabel } = getPeriodAndDueDate(r.month, contract?.start_date ?? null, contract?.payment_day ?? 1, contract?.desired_payment_day, contract?.desired_payment_date);
       dateCol = dueDateLabel;
     }
     return { ...r, apt, condo, dateCol };
@@ -216,7 +222,7 @@ export default function Dashboard() {
       if (r.month < contract.start_date.substring(0, 7)) return [];
     }
 
-    const status = getStatus(r, contract?.payment_day, contract?.start_date);
+    const status = getStatus(r, contract?.payment_day, contract?.start_date, contract?.desired_payment_day, contract?.desired_payment_date);
     const dueDateMonth = getDueDateMonth(r, contract);
     const paymentMonth = r.payment_date ? r.payment_date.substring(0, 7) : null;
     return [{ ...r, computedStatus: status, dueDateMonth, paymentMonth }];
