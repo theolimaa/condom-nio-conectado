@@ -118,7 +118,9 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
     const formData = { ...pendingSaveRef.current };
     pendingSaveRef.current = null;
     setShowPaymentDayModal(false);
-    await doSave(formData, false, newPaymentDay, paymentDayFromMonth);
+    // Supabase exige tipo date completo (YYYY-MM-DD) — usamos dia 01 como referência
+    const desiredDateFull = paymentDayFromMonth + '-01';
+    await doSave(formData, false, newPaymentDay, desiredDateFull);
   }
 
   async function handleClose() {
