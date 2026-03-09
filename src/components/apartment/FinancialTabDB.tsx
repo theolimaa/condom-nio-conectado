@@ -14,9 +14,15 @@ import { useApartment } from '@/hooks/useApartments';
 import { useCondominiums } from '@/hooks/useCondominiums';
 import ReceiptModalDB from './ReceiptModalDB';
 
-function getStatus(record: FinancialRecordDB, paymentDay?: number | null, contractStartDate?: string | null): 'paid' | 'overdue' | 'pending' {
+function getStatus(
+  record: FinancialRecordDB,
+  paymentDay?: number | null,
+  contractStartDate?: string | null,
+  desiredPaymentDay?: number | null,
+  desiredPaymentDate?: string | null
+): 'paid' | 'overdue' | 'pending' {
   if (record.paid) return 'paid';
-  return getRecordStatus(record.month, paymentDay, contractStartDate);
+  return getRecordStatus(record.month, paymentDay, contractStartDate, desiredPaymentDay, desiredPaymentDate);
 }
 
 export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tenantCpf }: {
@@ -37,6 +43,8 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
 
   const paymentDay = contract?.payment_day ?? 1;
   const contractStartDate = contract?.start_date ?? null;
+  const desiredPaymentDay = contract?.desired_payment_day ?? null;
+  const desiredPaymentDate = contract?.desired_payment_date ?? null;
 
   // Filtrar registros anteriores ao início do contrato
   const contractStartMonth = contractStartDate ? contractStartDate.substring(0, 7) : null;
@@ -65,8 +73,8 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
   const dedupedRecords = Array.from(seen.values()).sort((a, b) => a.month.localeCompare(b.month));
 
   const totalPaid = dedupedRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
-  const totalOverdue = dedupedRecords.filter(r => getStatus(r, paymentDay, contractStartDate) === 'overdue').reduce((s, r) => s + r.rent_value, 0);
-  const totalPending = dedupedRecords.filter(r => !r.paid && getStatus(r, paymentDay, contractStartDate) === 'pending').reduce((s, r) => s + r.rent_value, 0);
+  const totalOverdue = dedupedRecords.filter(r => getStatus(r, paymentDay, contractStartDate, desiredPaymentDay, desiredPaymentDate) === 'overdue').reduce((s, r) => s + r.rent_value, 0);
+  const totalPending = dedupedRecords.filter(r => !r.paid && getStatus(r, paymentDay, contractStartDate, desiredPaymentDay, desiredPaymentDate) === 'pending').reduce((s, r) => s + r.rent_value, 0);
 
   async function togglePaid(record: FinancialRecordDB) {
     if (!record.paid) {
@@ -144,8 +152,8 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
             </thead>
             <tbody>
               {dedupedRecords.map(r => {
-                const st = getStatus(r, paymentDay, contractStartDate);
-                const { periodLabel, dueDateLabel } = getPeriodAndDueDate(r.month, contractStartDate, paymentDay);
+                const st = getStatus(r, paymentDay, contractStartDate, desiredPaymentDay, desiredPaymentDate);
+                const { periodLabel, dueDateLabel } = getPeriodAndDueDate(r.month, contractStartDate, paymentDay, desiredPaymentDay, desiredPaymentDate);
                 return (
                   <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 font-medium text-xs">{periodLabel}</td>
