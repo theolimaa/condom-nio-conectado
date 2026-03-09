@@ -38,7 +38,9 @@ export function getPeriodAndDueDate(
 ) {
   // Se há uma mudança de dia de vencimento agendada e o mês atual já atingiu
   // o mês de aplicação, usa o novo dia de vencimento
-  if (desiredPaymentDay && desiredPaymentDate && monthStr >= desiredPaymentDate) {
+  // desiredPaymentDate é armazenado como YYYY-MM-01 (tipo date do Postgres)
+  // monthStr é YYYY-MM — comparamos só os 7 primeiros chars
+  if (desiredPaymentDay && desiredPaymentDate && monthStr >= desiredPaymentDate.substring(0, 7)) {
     paymentDay = desiredPaymentDay;
   }
 
