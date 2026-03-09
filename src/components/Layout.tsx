@@ -1,7 +1,18 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, LogOut, User, ChevronRight, Menu, X, Home, Wallet,
-  FileBarChart2, DoorOpen, ChevronDown, ChevronUp
+  LayoutDashboard,
+  LogOut,
+  User,
+  ChevronRight,
+  Menu,
+  X,
+  Home,
+  Wallet,
+  FileBarChart2,
+  DoorOpen,
+  ChevronDown,
+  ChevronUp,
+  FileText,
 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,6 +31,7 @@ const navItems = [
       { label: 'Índice de Vacância', icon: DoorOpen, path: '/financeiro/vacancia' },
     ],
   },
+  { label: 'Recibos', icon: FileText, path: '/recibos' },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -45,7 +57,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
     events.forEach(e => window.addEventListener(e, resetTimer, { passive: true }));
-    resetTimer(); // inicia o timer
+    resetTimer();
     return () => {
       events.forEach(e => window.removeEventListener(e, resetTimer));
       if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
@@ -73,7 +85,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     navigate('/login');
   }
 
-  const userName = user?.user_metadata?.username || user?.email?.split('@')[0] || 'Usuário';
+  const userName =
+    user?.user_metadata?.username || user?.email?.split('@')[0] || 'Usuário';
   const userEmail = user?.email || '';
 
   function SidebarContent({ mobile = false }: { mobile?: boolean }) {
@@ -84,9 +97,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary shrink-0">
             <Home className="w-5 h-5 text-primary-foreground" />
           </div>
-          <div className="overflow-hidden transition-all duration-300" style={{ width: mobile || sidebarOpen ? 'auto' : 0, opacity: mobile || sidebarOpen ? 1 : 0 }}>
-            <p className="text-sm font-bold text-sidebar-accent-foreground leading-tight whitespace-nowrap">Living Gest</p>
-            <p className="text-xs whitespace-nowrap" style={{ color: 'hsl(var(--sidebar-foreground))' }}>Gestão de Imóveis</p>
+          <div
+            className="overflow-hidden transition-all duration-300"
+            style={{
+              width: mobile || sidebarOpen ? 'auto' : 0,
+              opacity: mobile || sidebarOpen ? 1 : 0,
+            }}
+          >
+            <p className="text-sm font-bold text-sidebar-accent-foreground leading-tight whitespace-nowrap">
+              Living Gest
+            </p>
+            <p
+              className="text-xs whitespace-nowrap"
+              style={{ color: 'hsl(var(--sidebar-foreground))' }}
+            >
+              Gestão de Imóveis
+            </p>
           </div>
           {mobile && (
             <button
@@ -100,7 +126,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Nav */}
         <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {navItems.map(item => {
             const isActive = location.pathname.startsWith(item.path);
             if (item.children) {
               return (
@@ -120,15 +146,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     {(mobile || sidebarOpen) && (
                       <>
                         <span className="flex-1">{item.label}</span>
-                        {financeiroOpen
-                          ? <ChevronUp className="w-4 h-4 ml-auto opacity-60" />
-                          : <ChevronDown className="w-4 h-4 ml-auto opacity-60" />}
+                        {financeiroOpen ? (
+                          <ChevronUp className="w-4 h-4 ml-auto opacity-60" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 ml-auto opacity-60" />
+                        )}
                       </>
                     )}
                   </button>
                   <div
                     className="overflow-hidden transition-all duration-300 ease-in-out"
-                    style={{ maxHeight: (mobile || sidebarOpen) && financeiroOpen ? '200px' : '0px' }}
+                    style={{
+                      maxHeight:
+                        (mobile || sidebarOpen) && financeiroOpen ? '200px' : '0px',
+                    }}
                   >
                     <div className="ml-3 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
                       {item.children.map(child => {
@@ -137,11 +168,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                           <Link
                             key={child.path}
                             to={child.path}
-                            className={`sidebar-nav-item py-1.5 text-sm ${childActive ? 'active' : ''}`}
+                            className={`sidebar-nav-item py-1.5 text-sm ${
+                              childActive ? 'active' : ''
+                            }`}
                           >
                             <child.icon className="w-4 h-4 shrink-0" />
                             <span>{child.label}</span>
-                            {childActive && <ChevronRight className="w-3 h-3 ml-auto" />}
+                            {childActive && (
+                              <ChevronRight className="w-3 h-3 ml-auto" />
+                            )}
                           </Link>
                         );
                       })}
@@ -150,6 +185,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </div>
               );
             }
+
             return (
               <Link
                 key={item.path}
@@ -158,7 +194,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               >
                 <item.icon className="w-5 h-5 shrink-0" />
                 {(mobile || sidebarOpen) && <span>{item.label}</span>}
-                {(mobile || sidebarOpen) && isActive && <ChevronRight className="w-4 h-4 ml-auto" />}
+                {(mobile || sidebarOpen) && isActive && (
+                  <ChevronRight className="w-4 h-4 ml-auto" />
+                )}
               </Link>
             );
           })}
@@ -168,15 +206,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="px-2 py-3 border-t border-sidebar-border space-y-1">
           <Link
             to="/profile"
-            className={`sidebar-nav-item ${location.pathname === '/profile' ? 'active' : ''}`}
+            className={`sidebar-nav-item ${
+              location.pathname === '/profile' ? 'active' : ''
+            }`}
           >
             <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
               <User className="w-3 h-3 text-primary-foreground" />
             </div>
             {(mobile || sidebarOpen) && (
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-sidebar-accent-foreground truncate">{userName}</p>
-                <p className="text-xs truncate" style={{ color: 'hsl(var(--sidebar-foreground))' }}>{userEmail}</p>
+                <p className="text-xs font-semibold text-sidebar-accent-foreground truncate">
+                  {userName}
+                </p>
+                <p
+                  className="text-xs truncate"
+                  style={{ color: 'hsl(var(--sidebar-foreground))' }}
+                >
+                  {userEmail}
+                </p>
               </div>
             )}
           </Link>
@@ -195,8 +242,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-
-      {/* -- DESKTOP SIDEBAR - transição suave de largura -- */}
+      {/* -- DESKTOP SIDEBAR -- */}
       <aside
         className="hidden md:flex flex-col shrink-0 transition-all duration-300 ease-in-out"
         style={{
@@ -217,13 +263,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </button>
       </div>
 
-      {/* -- MOBILE OVERLAY DRAWER - slide suave -- */}
-      {/* Backdrop */}
+      {/* -- MOBILE OVERLAY DRAWER -- */}
       <div
-        className={`fixed inset-0 z-40 bg-black/50 md:hidden transition-opacity duration-300 ${mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 z-40 bg-black/50 md:hidden transition-opacity duration-300 ${
+          mobileMenuOpen
+            ? 'opacity-100 pointer-events-auto'
+            : 'opacity-0 pointer-events-none'
+        }`}
         onClick={() => setMobileMenuOpen(false)}
       />
-      {/* Drawer */}
       <aside
         className="fixed inset-y-0 left-0 z-50 flex flex-col w-72 md:hidden shadow-xl transition-transform duration-300 ease-in-out"
         style={{
@@ -251,10 +299,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="font-bold text-sm">Living Gest</span>
           </div>
         </header>
-
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
       </div>
     </div>
   );
