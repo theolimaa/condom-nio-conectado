@@ -110,6 +110,9 @@ export default function Financial() {
   //   → "vence em 10/02" aparece em fevereiro, independente do período de referência
   //
   let filtered = enriched.filter(r => {
+    // Exclui registros cujo período de referência é anterior a 2026
+    if (r.month < '2026-01') return false;
+
     if (filterCondo !== 'all' && r.condo?.id !== filterCondo) return false;
 
     let dateForFilter: string;
