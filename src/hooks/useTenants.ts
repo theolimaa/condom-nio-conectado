@@ -37,7 +37,7 @@ export function useTenants(apartmentId?: string) {
       let query = supabase
         .from('tenants')
         .select('*')
-        .is('archived_at', null)            // ← apenas ativos
+        .is('archived_at', null) // ← apenas ativos
         .order('created_at', { ascending: false });
       if (apartmentId) query = query.eq('apartment_id', apartmentId);
       const { data, error } = await query;
@@ -144,7 +144,8 @@ export function useUpdatePreviousTenant() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      id, ...updates
+      id,
+      ...updates
     }: {
       id: string;
       first_name?: string;
@@ -175,6 +176,26 @@ export function useAddResident() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['residents', data.tenant_id] });
       toast.success('Morador adicionado!');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdateResident() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      tenantId,
+      ...updates
+    }: Partial<ResidentDB> & { id: string; tenantId: string }) => {
+      const { error } = await supabase.from('residents').update(updates).eq('id', id);
+      if (error) throw error;
+      return tenantId;
+    },
+    onSuccess: (tenantId) => {
+      qc.invalidateQueries({ queryKey: ['residents', tenantId] });
+      toast.success('Morador atualizado!');
     },
     onError: (e: Error) => toast.error(e.message),
   });
