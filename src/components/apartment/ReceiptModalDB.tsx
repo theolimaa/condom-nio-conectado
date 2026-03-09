@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
-import { FileText, Download, X, Pencil, Share2, Save } from 'lucide-react';
+import { FileText, Download, X, Pencil, Share2, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { formatCurrency, formatDate } from '@/lib/utils-app';
@@ -106,10 +111,13 @@ export default function ReceiptModalDB({
   }
 
   const receiptCode = generateReceiptCode();
+
   const cautionText =
     contract?.caution_paid && contract.caution_value
       ? `Caução paga no valor de ${formatCurrency(contract.caution_value)}${
-          contract.caution_date ? ` na data ${formatDate(contract.caution_date)}` : ''
+          contract.caution_date
+            ? ` na data ${formatDate(contract.caution_date)}`
+            : ''
         }.`
       : '';
 
@@ -126,7 +134,10 @@ export default function ReceiptModalDB({
     .slice(0, 12);
 
   const adminName =
-    user?.user_metadata?.username || user?.email?.split('@')[0] || 'Administrador';
+    user?.user_metadata?.username ||
+    user?.email?.split('@')[0] ||
+    'Administrador';
+
   const today = new Date().toLocaleDateString('pt-BR', {
     day: 'numeric',
     month: 'long',
@@ -148,7 +159,9 @@ export default function ReceiptModalDB({
   useEffect(() => {
     if (!open) return;
     const periodLabel = getPeriodLabel(record.month);
-    const rentFormatted = formatCurrency(editableValues[record.id] ?? record.rent_value);
+    const rentFormatted = formatCurrency(
+      editableValues[record.id] ?? record.rent_value
+    );
     setTitle(
       `RECIBO — APTO ${apartment.unit_number} — ${tenant.first_name} ${tenant.last_name} — ${today}`
     );
@@ -203,7 +216,6 @@ export default function ReceiptModalDB({
       pago: 145,
       devendo: 170,
     };
-
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     doc.text('Período', cols.periodo, y);
@@ -233,7 +245,6 @@ export default function ReceiptModalDB({
       doc.text(owed > 0 ? formatCurrency(owed) : '—', cols.devendo, y);
       y += 5;
     });
-
     addLine();
     doc.setFont('helvetica', 'bold');
     doc.text(`Total Pago: ${formatCurrency(totalPaid)}`, cols.pago - 15, y);
@@ -247,20 +258,9 @@ export default function ReceiptModalDB({
     return doc.output('arraybuffer') as unknown as Uint8Array;
   }
 
-  // Baixar PDF + salvar backup automaticamente
-  async function handleDownloadAndSave() {
+  // ── Salvar backup no Supabase apenas (sem baixar) ────────────────────────────
+  function handleSaveOnly() {
     const bytes = buildPDF();
-
-    // 1. Download local
-    const blob = new Blob([bytes], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Recibo-${receiptCode}.pdf`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-
-    // 2. Salvar backup no Supabase (silencioso — não bloqueia o fluxo)
     saveReceipt.mutate({
       pdfBytes: bytes,
       receiptCode,
@@ -276,22 +276,34 @@ export default function ReceiptModalDB({
     });
   }
 
-  // Compartilhar via Web Share API
+  // ── Baixar PDF apenas (sem salvar backup) ────────────────────────────────────
+  function handleDownload() {
+    const bytes = buildPDF();
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Recibo-${receiptCode}.pdf`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  // ── Compartilhar via Web Share API ───────────────────────────────────────────
   async function handleShare() {
     const bytes = buildPDF();
     const blob = new Blob([bytes], { type: 'application/pdf' });
     const file = new File([blob], `Recibo-${receiptCode}.pdf`, {
       type: 'application/pdf',
     });
-
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       await navigator.share({ files: [file], title: `Recibo ${receiptCode}` });
     } else {
-      handleDownloadAndSave();
+      handleDownload();
     }
   }
 
-  const canShare = typeof navigator !== 'undefined' && !!navigator.share;
+  const canShare =
+    typeof navigator !== 'undefined' && !!navigator.share;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -299,7 +311,8 @@ export default function ReceiptModalDB({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-primary" />
-            Recibo — Apto {apartment.unit_number} — {getPeriodLabel(record.month)}
+            Recibo — Apto {apartment.unit_number} —{' '}
+            {getPeriodLabel(record.month)}
           </DialogTitle>
         </DialogHeader>
 
@@ -317,7 +330,12 @@ export default function ReceiptModalDB({
           </div>
 
           <div>
-            <EditableText value={mainText} onChange={setMainText} multiline className="w-full" />
+            <EditableText
+              value={mainText}
+              onChange={setMainText}
+              multiline
+              className="w-full"
+            />
           </div>
 
           {(cautionLine || contract?.caution_paid) && (
@@ -333,7 +351,10 @@ export default function ReceiptModalDB({
 
           <div>
             <p className="font-bold mb-2 border-b border-border pb-1">
-              <EditableText value={historyTitle} onChange={setHistoryTitle} />
+              <EditableText
+                value={historyTitle}
+                onChange={setHistoryTitle}
+              />
             </p>
             <table className="w-full text-xs">
               <thead>
@@ -400,7 +421,11 @@ export default function ReceiptModalDB({
                     {formatCurrency(
                       yearRecords
                         .filter(r => r.paid)
-                        .reduce((s, r) => s + (editableValues[r.id] ?? r.rent_value), 0)
+                        .reduce(
+                          (s, r) =>
+                            s + (editableValues[r.id] ?? r.rent_value),
+                          0
+                        )
                     )}
                   </td>
                   <td
@@ -410,7 +435,11 @@ export default function ReceiptModalDB({
                     {formatCurrency(
                       yearRecords
                         .filter(r => !r.paid)
-                        .reduce((s, r) => s + (editableValues[r.id] ?? r.rent_value), 0)
+                        .reduce(
+                          (s, r) =>
+                            s + (editableValues[r.id] ?? r.rent_value),
+                          0
+                        )
                     )}
                   </td>
                 </tr>
@@ -419,7 +448,11 @@ export default function ReceiptModalDB({
           </div>
 
           <div className="border-t border-border pt-3 text-xs text-muted-foreground">
-            <EditableText value={footer} onChange={setFooter} className="w-full" />
+            <EditableText
+              value={footer}
+              onChange={setFooter}
+              className="w-full"
+            />
           </div>
         </div>
 
@@ -428,19 +461,33 @@ export default function ReceiptModalDB({
             <X className="w-4 h-4 mr-2" />
             Fechar
           </Button>
+
           {canShare && (
             <Button variant="outline" onClick={handleShare}>
               <Share2 className="w-4 h-4 mr-2" />
               Compartilhar
             </Button>
           )}
-          <Button onClick={handleDownloadAndSave} disabled={saveReceipt.isPending}>
+
+          {/* ── Botão Salvar (backup apenas) ── */}
+          <Button
+            variant="outline"
+            onClick={handleSaveOnly}
+            disabled={saveReceipt.isPending}
+            title="Salva o recibo na página de Recibos sem baixar"
+          >
             {saveReceipt.isPending ? (
-              <Save className="w-4 h-4 mr-2 animate-pulse" />
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             ) : (
-              <Download className="w-4 h-4 mr-2" />
+              <Save className="w-4 h-4 mr-2" />
             )}
-            Salvar e Baixar PDF
+            Salvar
+          </Button>
+
+          {/* ── Botão Baixar PDF (download apenas) ── */}
+          <Button onClick={handleDownload}>
+            <Download className="w-4 h-4 mr-2" />
+            Baixar PDF
           </Button>
         </div>
       </DialogContent>
