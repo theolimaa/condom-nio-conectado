@@ -37,7 +37,7 @@ export default function Financial() {
 
   function toggleSort(field: SortField) {
     if (sortField === field) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortField(field);
       setSortDir('asc');
@@ -54,9 +54,20 @@ export default function Financial() {
     return { ...r, apt, condo, tenant, contract, computedStatus: status };
   });
 
-  // Apply filters
+  // ✅ CORREÇÃO: filtrar por payment_date quando pago, por month quando não pago
+  // A lógica: "pagamento realizado em março" → usar payment_date para mês/ano do filtro
   let filtered = enriched.filter(r => {
-    const [y, m] = r.month.split('-').map(Number);
+    // Determina o mês/ano a usar para o filtro:
+    // - Se pago: usa payment_date (quando o dinheiro efetivamente entrou)
+    // - Se não pago: usa month (período de referência, para mostrar pendentes do mês)
+    let filterDate: string;
+    if (r.paid && r.payment_date) {
+      filterDate = r.payment_date; // YYYY-MM-DD
+    } else {
+      filterDate = r.month + '-01'; // YYYY-MM → YYYY-MM-01
+    }
+
+    const [y, m] = filterDate.split('-').map(Number);
     if (y !== Number(filterYear)) return false;
     if (filterMonth !== 'all' && m - 1 !== Number(filterMonth)) return false;
     if (filterCondo !== 'all' && r.condo?.id !== filterCondo) return false;
@@ -73,16 +84,29 @@ export default function Financial() {
     filtered = [...filtered].sort((a, b) => {
       let cmp = 0;
       switch (sortField) {
-        case 'condo': cmp = (a.condo?.name ?? '').localeCompare(b.condo?.name ?? ''); break;
-        case 'apt': cmp = (a.apt?.unit_number ?? '').localeCompare(b.apt?.unit_number ?? '', undefined, { numeric: true }); break;
+        case 'condo':
+          cmp = (a.condo?.name ?? '').localeCompare(b.condo?.name ?? '');
+          break;
+        case 'apt':
+          cmp = (a.apt?.unit_number ?? '').localeCompare(b.apt?.unit_number ?? '', undefined, {
+            numeric: true,
+          });
+          break;
         case 'tenant': {
           const na = a.tenant ? `${a.tenant.first_name} ${a.tenant.last_name}` : '';
           const nb = b.tenant ? `${b.tenant.first_name} ${b.tenant.last_name}` : '';
-          cmp = na.localeCompare(nb); break;
+          cmp = na.localeCompare(nb);
+          break;
         }
-        case 'period': cmp = a.month.localeCompare(b.month); break;
-        case 'status': cmp = a.computedStatus.localeCompare(b.computedStatus); break;
-        case 'payment_date': cmp = (a.payment_date ?? '').localeCompare(b.payment_date ?? ''); break;
+        case 'period':
+          cmp = a.month.localeCompare(b.month);
+          break;
+        case 'status':
+          cmp = a.computedStatus.localeCompare(b.computedStatus);
+          break;
+        case 'payment_date':
+          cmp = (a.payment_date ?? '').localeCompare(b.payment_date ?? '');
+          break;
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
@@ -92,7 +116,9 @@ export default function Financial() {
 
   const totalToReceive = filtered.filter(r => !r.paid).reduce((s, r) => s + r.rent_value, 0);
   const totalReceived = filtered.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
-  const totalOverdue = filtered.filter(r => r.computedStatus === 'overdue').reduce((s, r) => s + r.rent_value, 0);
+  const totalOverdue = filtered
+    .filter(r => r.computedStatus === 'overdue')
+    .reduce((s, r) => s + r.rent_value, 0);
 
   async function updatePaymentDate(record: FinancialRecordDB, date: string) {
     const paid = !!date;
@@ -114,16 +140,31 @@ export default function Financial() {
     });
   }
 
-  const receiptApt = receiptRecord ? apartments.find(a => a.id === receiptRecord.apartment_id) : null;
-  const receiptTenant = receiptRecord ? allTenants.find(t => t.id === receiptRecord.tenant_id) : null;
-  const receiptContract = receiptRecord ? contracts.find(c => c.id === receiptRecord.contract_id) : null;
-  const receiptCondo = receiptApt ? condominiums.find(c => c.id === receiptApt.condominium_id) : null;
+  const receiptApt = receiptRecord
+    ? apartments.find(a => a.id === receiptRecord.apartment_id)
+    : null;
+  const receiptTenant = receiptRecord
+    ? allTenants.find(t => t.id === receiptRecord.tenant_id)
+    : null;
+  const receiptContract = receiptRecord
+    ? contracts.find(c => c.id === receiptRecord.contract_id)
+    : null;
+  const receiptCondo = receiptApt
+    ? condominiums.find(c => c.id === receiptApt.condominium_id)
+    : null;
 
   function SortHeader({ field, children }: { field: SortField; children: React.ReactNode }) {
     return (
-      <button className="inline-flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => toggleSort(field)}>
+      <button
+        className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+        onClick={() => toggleSort(field)}
+      >
         {children}
-        <ArrowUpDown className={`w-3 h-3 ${sortField === field ? 'text-primary' : 'text-muted-foreground/50'}`} />
+        <ArrowUpDown
+          className={`w-3 h-3 ${
+            sortField === field ? 'text-primary' : 'text-muted-foreground/50'
+          }`}
+        />
       </button>
     );
   }
@@ -141,56 +182,100 @@ export default function Financial() {
           <div className="stat-card">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">Total a Receber</p>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--warning)/0.12)' }}>
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ background: 'hsl(var(--warning)/0.12)' }}
+              >
                 <DollarSign className="w-4 h-4" style={{ color: 'hsl(var(--warning))' }} />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--warning))' }}>{formatCurrency(totalToReceive)}</p>
+            <p
+              className="text-xl md:text-2xl font-bold"
+              style={{ color: 'hsl(var(--warning))' }}
+            >
+              {formatCurrency(totalToReceive)}
+            </p>
           </div>
           <div className="stat-card">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">Total Recebido</p>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--paid)/0.12)' }}>
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ background: 'hsl(var(--paid)/0.12)' }}
+              >
                 <TrendingUp className="w-4 h-4" style={{ color: 'hsl(var(--paid))' }} />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(totalReceived)}</p>
+            <p
+              className="text-xl md:text-2xl font-bold"
+              style={{ color: 'hsl(var(--paid))' }}
+            >
+              {formatCurrency(totalReceived)}
+            </p>
           </div>
           <div className="stat-card">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">Total Inadimplente</p>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--overdue)/0.12)' }}>
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ background: 'hsl(var(--overdue)/0.12)' }}
+              >
                 <TrendingDown className="w-4 h-4" style={{ color: 'hsl(var(--overdue))' }} />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--overdue))' }}>{formatCurrency(totalOverdue)}</p>
+            <p
+              className="text-xl md:text-2xl font-bold"
+              style={{ color: 'hsl(var(--overdue))' }}
+            >
+              {formatCurrency(totalOverdue)}
+            </p>
           </div>
         </div>
 
         {/* Filters */}
         <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
           <Select value={filterYear} onValueChange={setFilterYear}>
-            <SelectTrigger className="w-24 h-9 text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-24 h-9 text-sm">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
-              {YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+              {YEARS.map(y => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={filterMonth} onValueChange={setFilterMonth}>
-            <SelectTrigger className="w-36 h-9 text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-36 h-9 text-sm">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os meses</SelectItem>
-              {MONTHS.map((m, i) => <SelectItem key={i} value={String(i)}>{m}</SelectItem>)}
+              {MONTHS.map((m, i) => (
+                <SelectItem key={i} value={String(i)}>
+                  {m}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={filterCondo} onValueChange={setFilterCondo}>
-            <SelectTrigger className="w-44 h-9 text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-44 h-9 text-sm">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos condomínios</SelectItem>
-              {condominiums.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              {condominiums.map(c => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-36 h-9 text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-36 h-9 text-sm">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos status</SelectItem>
               <SelectItem value="paid">Pago</SelectItem>
@@ -202,48 +287,90 @@ export default function Financial() {
 
         {/* Master table */}
         {isLoading ? (
-          <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          </div>
         ) : filtered.length === 0 ? (
           <div className="bg-card border border-dashed border-border rounded-xl p-12 text-center">
-            <p className="text-muted-foreground">Nenhum registro encontrado para os filtros selecionados.</p>
+            <p className="text-muted-foreground">
+              Nenhum registro encontrado para os filtros selecionados.
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-border bg-card">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground"><SortHeader field="condo">Condomínio</SortHeader></th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground"><SortHeader field="apt">Apto</SortHeader></th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground"><SortHeader field="tenant">Inquilino</SortHeader></th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground"><SortHeader field="period">Período Ref.</SortHeader></th>
-                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">Vencimento</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Valor</th>
-                  <th className="text-center px-4 py-3 font-medium text-muted-foreground"><SortHeader field="status">Status</SortHeader></th>
-                  <th className="text-center px-4 py-3 font-medium text-muted-foreground"><SortHeader field="payment_date">Data Pagamento</SortHeader></th>
-                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">Ações</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                    <SortHeader field="condo">Condomínio</SortHeader>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                    <SortHeader field="apt">Apto</SortHeader>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                    <SortHeader field="tenant">Inquilino</SortHeader>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                    <SortHeader field="period">Período Ref.</SortHeader>
+                  </th>
+                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">
+                    Vencimento
+                  </th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">
+                    Valor
+                  </th>
+                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">
+                    <SortHeader field="status">Status</SortHeader>
+                  </th>
+                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">
+                    <SortHeader field="payment_date">Data Pagamento</SortHeader>
+                  </th>
+                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">
+                    Ações
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(r => {
                   const contractStartDate = r.contract?.start_date ?? null;
                   const paymentDay = r.contract?.payment_day ?? 1;
-                  const { periodLabel, dueDateLabel } = getPeriodAndDueDate(r.month, contractStartDate, paymentDay);
-
+                  const { periodLabel, dueDateLabel } = getPeriodAndDueDate(
+                    r.month,
+                    contractStartDate,
+                    paymentDay
+                  );
                   return (
-                    <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                    <tr
+                      key={r.id}
+                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                    >
                       <td className="px-4 py-3">{r.condo?.name ?? '—'}</td>
                       <td className="px-4 py-3 font-medium">{r.apt?.unit_number ?? '—'}</td>
                       <td className="px-4 py-3">
-                        {r.tenant ? `${r.tenant.first_name} ${r.tenant.last_name}` : '—'}
+                        {r.tenant
+                          ? `${r.tenant.first_name} ${r.tenant.last_name}`
+                          : '—'}
                       </td>
                       <td className="px-4 py-3 text-xs">{periodLabel}</td>
                       <td className="px-4 py-3 text-center text-xs">{dueDateLabel}</td>
-                      <td className="px-4 py-3 text-right font-semibold">{formatCurrency(r.rent_value)}</td>
+                      <td className="px-4 py-3 text-right font-semibold">
+                        {formatCurrency(r.rent_value)}
+                      </td>
                       <td className="px-4 py-3 text-center">
                         <button onClick={() => togglePaid(r)} className="cursor-pointer">
-                          {r.computedStatus === 'paid' && <span className="badge-paid"><CheckCircle className="w-3 h-3" /> Pago</span>}
-                          {r.computedStatus === 'pending' && <span className="badge-unpaid">Pendente</span>}
-                          {r.computedStatus === 'overdue' && <span className="badge-overdue"><AlertCircle className="w-3 h-3" /> Inadimplente</span>}
+                          {r.computedStatus === 'paid' && (
+                            <span className="badge-paid">
+                              <CheckCircle className="w-3 h-3" /> Pago
+                            </span>
+                          )}
+                          {r.computedStatus === 'pending' && (
+                            <span className="badge-unpaid">Pendente</span>
+                          )}
+                          {r.computedStatus === 'overdue' && (
+                            <span className="badge-overdue">
+                              <AlertCircle className="w-3 h-3" /> Inadimplente
+                            </span>
+                          )}
                         </button>
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -282,7 +409,11 @@ export default function Financial() {
           apartment={receiptApt}
           tenant={receiptTenant}
           contract={receiptContract ?? null}
-          allRecords={financialRecords.filter(r => r.apartment_id === receiptRecord.apartment_id && r.tenant_id === receiptRecord.tenant_id)}
+          allRecords={financialRecords.filter(
+            r =>
+              r.apartment_id === receiptRecord.apartment_id &&
+              r.tenant_id === receiptRecord.tenant_id
+          )}
           condominiumName={receiptCondo?.name ?? ''}
         />
       )}
