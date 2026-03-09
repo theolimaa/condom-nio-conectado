@@ -81,12 +81,18 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
     desiredPaymentDay?: number | null,
     desiredPaymentDate?: string | null
   ) {
+    // Se há mudança de dia agendada, mantém payment_day com o valor ANTIGO no banco.
+    // O novo dia entra via desired_payment_day a partir de desired_payment_date.
+    const effectivePaymentDay = desiredPaymentDay
+      ? (contract?.payment_day ?? formData.payment_day ?? null)
+      : (formData.payment_day ?? null);
+
     const result = await upsertContract.mutateAsync({
       id: formData.id ?? contract?.id,
       tenant_id: tenantId,
       start_date: formData.start_date!,
       end_date: formData.end_date ?? null,
-      payment_day: formData.payment_day ?? null,
+      payment_day: effectivePaymentDay,
       desired_payment_day: desiredPaymentDay ?? null,
       desired_payment_date: desiredPaymentDate ?? null,
       rent_value: Number(formData.rent_value),
@@ -323,7 +329,8 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
             <p className="text-xs text-muted-foreground mb-1">Dia de Vencimento</p>
             <p className="font-semibold">Todo dia {contract.payment_day}</p>
             {contract.desired_payment_day && contract.desired_payment_date && (
-              <p className="text-xs text-amber-600 mt-1">
+              <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
                 Muda para dia {contract.desired_payment_day} a partir de{' '}
                 {(() => {
                   const [y, m] = contract.desired_payment_date.split('-');
