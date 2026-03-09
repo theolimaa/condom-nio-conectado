@@ -91,10 +91,29 @@ export default function MonthlyReport() {
         condoApts.some(a => a.id === r.apartment_id)
       );
 
+      // Determina o mês/ano do período selecionado para checar contratos ativos
+      const periodYear = Number(selectedYear);
+      const periodMonth = monthIndex + 1; // 1-indexed
+      const periodStart = `${periodYear}-${String(periodMonth).padStart(2, "0")}-01`;
+
       const rows = condoApts.map(apt => {
         const record = condoRecords.find(r => r.apartment_id === apt.id);
         const tenant = allTenants.find(t => t.id === record?.tenant_id);
-        return { apt, record, tenant, status: record?.computedStatus ?? null };
+
+        if (record) {
+          return { apt, record, tenant, status: record.computedStatus, isVacant: false };
+        }
+
+        // Sem registro: verifica se existe contrato ativo nesse apartamento no período
+        const hasActiveContract = contracts.some(c => {
+          if (c.apartment_id !== apt.id) return false;
+          if (!c.start_date) return false;
+          if (c.start_date > periodStart) return false;
+          if (c.end_date && c.end_date < periodStart) return false;
+          return true;
+        });
+
+        return { apt, record: null, tenant: null, status: null, isVacant: !hasActiveContract };
       });
 
       const totalPaid = condoRecords.filter(r => r.computedStatus === 'paid').reduce((s, r) => s + r.rent_value, 0);
@@ -171,7 +190,7 @@ export default function MonthlyReport() {
         else if (row.status === 'overdue') doc.setTextColor(239, 68, 68);
         else if (row.status === 'pending') doc.setTextColor(234, 179, 8);
         else doc.setTextColor(150, 150, 150);
-        const statusLabel = row.status === 'paid' ? 'Pago' : row.status === 'overdue' ? 'Inadimplente' : row.status === 'pending' ? 'A Receber' : 'Vago';
+        const statusLabel = row.status === 'paid' ? 'Pago' : row.status === 'overdue' ? 'Inadimplente' : row.status === 'pending' ? 'A Receber' : row.isVacant ? 'Vago' : '—';
         doc.text(statusLabel, ml + 160, y);
         doc.setTextColor(30, 30, 30);
         y += 5;
@@ -283,7 +302,8 @@ export default function MonthlyReport() {
                           {row.status === 'paid' && <span className="badge-active">Pago</span>}
                           {row.status === 'overdue' && <span className="badge-overdue">Inadimplente</span>}
                           {row.status === 'pending' && <span className="badge-unpaid">A Receber</span>}
-                          {!row.status && <span className="text-xs text-muted-foreground">Vago</span>}
+                          {!row.status && row.isVacant && <span className="text-xs text-muted-foreground">Vago</span>}
+                          {!row.status && !row.isVacant && <span className="text-xs text-muted-foreground">—</span>}
                         </td>
                       </tr>
                     ))}
