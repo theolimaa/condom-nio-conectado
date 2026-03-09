@@ -8,9 +8,16 @@ import {
   ChevronRight,
   ChevronDown,
   Search,
+  SaveAll,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
@@ -24,7 +31,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import Layout from '@/components/Layout';
 import { MONTHS, YEARS } from '@/lib/utils-app';
-import { useSavedReceipts, useDeleteSavedReceipt, refreshReceiptUrl, SavedReceipt } from '@/hooks/useReceipts';
+import {
+  useSavedReceipts,
+  useDeleteSavedReceipt,
+  useBulkSaveReceipts,
+  refreshReceiptUrl,
+  SavedReceipt,
+} from '@/hooks/useReceipts';
 import { useCondominiums } from '@/hooks/useCondominiums';
 
 function formatMonth(month: string) {
@@ -44,7 +57,6 @@ function ReceiptItem({
   async function handleDownload() {
     setLoading(true);
     try {
-      // Tenta a URL armazenada primeiro, se falhar gera nova signed URL
       let url = receipt.public_url;
       const resp = await fetch(url, { method: 'HEAD' }).catch(() => null);
       if (!resp || !resp.ok) {
@@ -80,7 +92,8 @@ function ReceiptItem({
           {receipt.tenant_name} — Apto {receipt.apartment_unit}
         </p>
         <p className="text-xs text-muted-foreground">
-          {formatMonth(receipt.month)} · Código: {receipt.receipt_code} · Salvo em {savedDate}
+          {formatMonth(receipt.month)} · Código: {receipt.receipt_code} · Salvo
+          em {savedDate}
         </p>
       </div>
       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -120,7 +133,6 @@ function FolderSection({
   onDelete: (r: SavedReceipt) => void;
 }) {
   const [open, setOpen] = useState(true);
-
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
       <button
@@ -138,7 +150,6 @@ function FolderSection({
           {receipts.length} recibo{receipts.length !== 1 ? 's' : ''}
         </span>
       </button>
-
       {open && (
         <div className="px-2 py-2 space-y-0.5">
           {receipts.map(r => (
@@ -154,12 +165,14 @@ export default function Receipts() {
   const { data: receipts = [], isLoading } = useSavedReceipts();
   const { data: condominiums = [] } = useCondominiums();
   const deleteReceipt = useDeleteSavedReceipt();
+  const bulkSave = useBulkSaveReceipts();
 
   const [filterYear, setFilterYear] = useState<string>('all');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [filterCondo, setFilterCondo] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [toDelete, setToDelete] = useState<SavedReceipt | null>(null);
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   // Filtrar recibos
   const filtered = useMemo(() => {
@@ -167,7 +180,8 @@ export default function Receipts() {
       const [y, m] = r.month.split('-').map(Number);
       if (filterYear !== 'all' && y !== Number(filterYear)) return false;
       if (filterMonth !== 'all' && m - 1 !== Number(filterMonth)) return false;
-      if (filterCondo !== 'all' && r.condominium_name !== filterCondo) return false;
+      if (filterCondo !== 'all' && r.condominium_name !== filterCondo)
+        return false;
       if (search) {
         const s = search.toLowerCase();
         if (
@@ -184,15 +198,21 @@ export default function Receipts() {
 
   // Agrupar por condomínio → mês
   const grouped = useMemo(() => {
-    const byCondoMonth: Record<string, { condoName: string; month: string; items: SavedReceipt[] }> = {};
+    const byCondoMonth: Record<
+      string,
+      { condoName: string; month: string; items: SavedReceipt[] }
+    > = {};
     for (const r of filtered) {
       const key = `${r.condominium_name}||${r.month}`;
       if (!byCondoMonth[key]) {
-        byCondoMonth[key] = { condoName: r.condominium_name, month: r.month, items: [] };
+        byCondoMonth[key] = {
+          condoName: r.condominium_name,
+          month: r.month,
+          items: [],
+        };
       }
       byCondoMonth[key].items.push(r);
     }
-    // Ordenar por condomínio, depois mês desc
     return Object.values(byCondoMonth).sort((a, b) => {
       const condoCmp = a.condoName.localeCompare(b.condoName);
       if (condoCmp !== 0) return condoCmp;
@@ -210,15 +230,32 @@ export default function Receipts() {
     <Layout>
       <div className="p-4 md:p-6 space-y-4 md:space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
-            <FileText className="w-6 h-6 text-primary" />
-            Recibos
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            Backup de todos os recibos gerados. Ao salvar um recibo no financeiro, ele é
-            armazenado aqui automaticamente.
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
+              <FileText className="w-6 h-6 text-primary" />
+              Recibos
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              Backup de todos os recibos gerados. Clique em "Salvar" no
+              financeiro de cada apartamento para arquivar aqui.
+            </p>
+          </div>
+
+          {/* Botão salvar todos */}
+          <Button
+            variant="outline"
+            onClick={() => setConfirmBulk(true)}
+            disabled={bulkSave.isPending}
+            className="shrink-0"
+          >
+            {bulkSave.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <SaveAll className="w-4 h-4 mr-2" />
+            )}
+            {bulkSave.isPending ? 'Salvando...' : 'Salvar todos os recibos pagos'}
+          </Button>
         </div>
 
         {/* Filtros */}
@@ -276,8 +313,8 @@ export default function Receipts() {
         {/* Contagem */}
         {!isLoading && (
           <p className="text-sm text-muted-foreground">
-            {filtered.length} recibo{filtered.length !== 1 ? 's' : ''} encontrado
-            {filtered.length !== 1 ? 's' : ''}
+            {filtered.length} recibo{filtered.length !== 1 ? 's' : ''}{' '}
+            encontrado{filtered.length !== 1 ? 's' : ''}
           </p>
         )}
 
@@ -289,10 +326,12 @@ export default function Receipts() {
         ) : filtered.length === 0 ? (
           <div className="bg-card border border-dashed border-border rounded-xl p-16 text-center">
             <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground/40" />
-            <p className="font-medium text-muted-foreground mb-1">Nenhum recibo encontrado</p>
+            <p className="font-medium text-muted-foreground mb-1">
+              Nenhum recibo encontrado
+            </p>
             <p className="text-sm text-muted-foreground">
-              Os recibos são salvos automaticamente ao clicar em "Salvar e Baixar PDF" no
-              financeiro de cada apartamento ou na página Financeiro.
+              Clique em "Salvar" no modal de recibo de cada apartamento, ou use
+              "Salvar todos os recibos pagos" para gerar o backup de uma vez.
             </p>
           </div>
         ) : (
@@ -309,15 +348,45 @@ export default function Receipts() {
         )}
       </div>
 
+      {/* Confirm bulk save */}
+      <AlertDialog open={confirmBulk} onOpenChange={setConfirmBulk}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Salvar todos os recibos pagos</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso irá gerar e salvar PDFs de todos os registros financeiros
+              marcados como <strong>pagos</strong> em todos os condomínios.
+              Recibos que já existem não serão sobrescritos. Pode levar alguns
+              minutos dependendo do volume.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmBulk(false);
+                bulkSave.mutate();
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Confirm delete */}
-      <AlertDialog open={!!toDelete} onOpenChange={open => !open && setToDelete(null)}>
+      <AlertDialog
+        open={!!toDelete}
+        onOpenChange={open => !open && setToDelete(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir Recibo</AlertDialogTitle>
             <AlertDialogDescription>
               Tem certeza que deseja excluir o recibo de{' '}
               <strong>{toDelete?.tenant_name}</strong> referente a{' '}
-              {toDelete ? formatMonth(toDelete.month) : ''}? Esta ação não pode ser desfeita.
+              {toDelete ? formatMonth(toDelete.month) : ''}? Esta ação não pode
+              ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
