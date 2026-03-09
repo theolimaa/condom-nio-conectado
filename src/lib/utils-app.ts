@@ -32,8 +32,16 @@ function daysInMonth(year: number, month: number): number {
 export function getPeriodAndDueDate(
   monthStr: string,
   contractStartDate: string | null,
-  paymentDay: number
+  paymentDay: number,
+  desiredPaymentDay?: number | null,
+  desiredPaymentDate?: string | null
 ) {
+  // Se há uma mudança de dia de vencimento agendada e o mês atual já atingiu
+  // o mês de aplicação, usa o novo dia de vencimento
+  if (desiredPaymentDay && desiredPaymentDate && monthStr >= desiredPaymentDate) {
+    paymentDay = desiredPaymentDay;
+  }
+
   const [y, m] = monthStr.split('-').map(Number);
 
   let startDay = 1;
@@ -77,10 +85,12 @@ export function getPeriodAndDueDate(
 export function getRecordStatus(
   month: string,
   paymentDay: number | null | undefined,
-  contractStartDate?: string | null
+  contractStartDate?: string | null,
+  desiredPaymentDay?: number | null,
+  desiredPaymentDate?: string | null
 ): 'overdue' | 'pending' {
   const day = paymentDay ?? 1;
-  const { dueDateStr } = getPeriodAndDueDate(month, contractStartDate ?? null, day);
+  const { dueDateStr } = getPeriodAndDueDate(month, contractStartDate ?? null, day, desiredPaymentDay, desiredPaymentDate);
   const [dy, dm, dd] = dueDateStr.split('-').map(Number);
   const dueDate = new Date(dy, dm - 1, dd);
   const today = new Date();
