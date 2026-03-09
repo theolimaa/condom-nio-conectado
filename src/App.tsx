@@ -13,6 +13,7 @@ import Dashboard from "./pages/Dashboard";
 import Financial from "./pages/Financial";
 import MonthlyReport from "./pages/MonthlyReport";
 import VacancyIndex from "./pages/VacancyIndex";
+import Receipts from "./pages/Receipts";
 import CondominiumDetail from "./pages/CondominiumDetail";
 import ApartmentDetail from "./pages/ApartmentDetail";
 import Profile from "./pages/Profile";
@@ -22,11 +23,12 @@ const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
@@ -49,6 +51,7 @@ function AppRoutes() {
       <Route path="/financeiro" element={<ProtectedRoute><Financial /></ProtectedRoute>} />
       <Route path="/financeiro/relatorio" element={<ProtectedRoute><MonthlyReport /></ProtectedRoute>} />
       <Route path="/financeiro/vacancia" element={<ProtectedRoute><VacancyIndex /></ProtectedRoute>} />
+      <Route path="/recibos" element={<ProtectedRoute><Receipts /></ProtectedRoute>} />
       <Route path="/condominiums/:id" element={<ProtectedRoute><CondominiumDetail /></ProtectedRoute>} />
       <Route path="/apartments/:id" element={<ProtectedRoute><ApartmentDetail /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
