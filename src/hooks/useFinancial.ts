@@ -26,10 +26,12 @@ export interface FinancialRecordDB {
   updated_at: string | null;
 }
 
-/** Saldo devedor = rent_value - paid_amount - debt_paid_amount */
+/** Saldo devedor = diferença entre valor do contrato e o que foi pago.
+ *  Só existe quando paid=true mas o valor pago foi parcial.
+ *  Registros não pagos (pending/overdue) retornam 0 — eles já aparecem em A Receber ou Inadimplente. */
 export function calcOwed(r: FinancialRecordDB): number {
-  if (!r.paid) return r.rent_value;
-  const paid = r.paid_amount ?? r.rent_value;
+  if (!r.paid) return 0; // não pagou → não é "devendo", é inadimplente ou a receber
+  const paid = r.paid_amount ?? r.rent_value; // retrocompat: sem paid_amount assume pago completo
   const debtPaid = r.debt_paid_amount ?? 0;
   return Math.max(0, r.rent_value - paid - debtPaid);
 }
