@@ -1,42 +1,30 @@
 import { useState } from 'react';
 import {
-  TrendingUp,
-  DollarSign,
-  TrendingDown,
-  CheckCircle,
-  AlertCircle,
-  Receipt,
-  Loader2,
-  ArrowUpDown,
+  TrendingUp, DollarSign, TrendingDown, CheckCircle, AlertCircle,
+  Receipt, Loader2, ArrowUpDown, XCircle, CalendarDays, Banknote,
+  Wallet, AlertTriangle,
 } from 'lucide-react';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import {
-  formatCurrency,
-  MONTHS,
-  YEARS,
-  getPeriodAndDueDate,
-  getRecordStatus,
-} from '@/lib/utils-app';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { formatCurrency, MONTHS, YEARS, getPeriodAndDueDate, getRecordStatus } from '@/lib/utils-app';
 import Layout from '@/components/Layout';
 import { useCondominiums } from '@/hooks/useCondominiums';
 import { useApartments } from '@/hooks/useApartments';
 import { useTenants } from '@/hooks/useTenants';
 import {
-  useAllFinancialRecords,
-  useUpsertFinancialRecord,
-  FinancialRecordDB,
+  useAllFinancialRecords, useUpsertFinancialRecord, FinancialRecordDB,
+  calcReceived, calcOwed,
 } from '@/hooks/useFinancial';
 import { useContracts } from '@/hooks/useContracts';
 import ReceiptModalDB from '@/components/apartment/ReceiptModalDB';
 
-// ─── Classifica um registro ───────────────────────────────────────────────────
+type PaymentMethod = 'pix' | 'especie';
+
 function computeStatus(
   record: FinancialRecordDB,
   paymentDay?: number | null,
@@ -46,18 +34,13 @@ function computeStatus(
   return getRecordStatus(record.month, paymentDay, contractStartDate);
 }
 
-// ─── Determina a data de vencimento de um registro ───────────────────────────
 function getDueDate(
   month: string,
   contractStartDate: string | null | undefined,
   paymentDay: number | null | undefined
 ): string {
-  const { dueDateStr } = getPeriodAndDueDate(
-    month,
-    contractStartDate ?? null,
-    paymentDay ?? 1
-  );
-  return dueDateStr; // YYYY-MM-DD
+  const { dueDateStr } = getPeriodAndDueDate(month, contractStartDate ?? null, paymentDay ?? 1);
+  return dueDateStr;
 }
 
 type SortField = 'condo' | 'apt' | 'tenant' | 'period' | 'status' | 'payment_date';
@@ -79,16 +62,19 @@ export default function Financial() {
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
+  // Modal de pagamento
+  const [paymentModal, setPaymentModal] = useState<{
+    record: FinancialRecordDB;
+    date: string;
+    paidAmount: string;
+    method: PaymentMethod;
+  } | null>(null);
+
   function toggleSort(field: SortField) {
-    if (sortField === field) {
-      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortField(field);
-      setSortDir('asc');
-    }
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir('asc'); }
   }
 
-  // ── Enriquecer registros ─────────────────────────────────────────────────────
   const enriched = financialRecords.map(r => {
     const apt = apartments.find(a => a.id === r.apartment_id);
     const condo = apt ? condominiums.find(c => c.id === apt.condominium_id) : null;
@@ -99,30 +85,15 @@ export default function Financial() {
     return { ...r, apt, condo, tenant, contract, computedStatus: status, dueDate };
   });
 
-  // ── Filtro ───────────────────────────────────────────────────────────────────
-  //
-  // PAGOS (Recebido):
-  //   → filtra pelo mês/ano da payment_date
-  //   → "pagou em fevereiro" aparece em fevereiro
-  //
-  // NÃO PAGOS (A Receber / Inadimplente):
-  //   → filtra pelo mês/ano da DATA DE VENCIMENTO (dueDateStr calculado)
-  //   → "vence em 10/02" aparece em fevereiro, independente do período de referência
-  //
   let filtered = enriched.filter(r => {
-    // Exclui registros cujo período de referência é anterior a 2026
     if (r.month < '2026-01') return false;
-
     if (filterCondo !== 'all' && r.condo?.id !== filterCondo) return false;
 
     let dateForFilter: string;
-
     if (r.paid && r.payment_date) {
-      // Recebido: usa o mês em que o pagamento ocorreu
-      dateForFilter = r.payment_date; // YYYY-MM-DD
+      dateForFilter = r.payment_date;
     } else {
-      // A Receber / Inadimplente: usa o mês do vencimento
-      dateForFilter = r.dueDate; // YYYY-MM-DD
+      dateForFilter = r.dueDate;
     }
 
     const [y, m] = dateForFilter.split('-').map(Number);
@@ -134,24 +105,19 @@ export default function Financial() {
       if (filterStatus === 'pending' && r.computedStatus !== 'pending') return false;
       if (filterStatus === 'overdue' && r.computedStatus !== 'overdue') return false;
     }
-
     return true;
   });
 
-  // ── Ordenação ────────────────────────────────────────────────────────────────
   if (sortField) {
     filtered = [...filtered].sort((a, b) => {
       let cmp = 0;
       switch (sortField) {
         case 'condo': cmp = (a.condo?.name ?? '').localeCompare(b.condo?.name ?? ''); break;
-        case 'apt':
-          cmp = (a.apt?.unit_number ?? '').localeCompare(b.apt?.unit_number ?? '', undefined, { numeric: true });
-          break;
+        case 'apt': cmp = (a.apt?.unit_number ?? '').localeCompare(b.apt?.unit_number ?? '', undefined, { numeric: true }); break;
         case 'tenant': {
           const na = a.tenant ? `${a.tenant.first_name} ${a.tenant.last_name}` : '';
           const nb = b.tenant ? `${b.tenant.first_name} ${b.tenant.last_name}` : '';
-          cmp = na.localeCompare(nb);
-          break;
+          cmp = na.localeCompare(nb); break;
         }
         case 'period': cmp = a.month.localeCompare(b.month); break;
         case 'status': cmp = a.computedStatus.localeCompare(b.computedStatus); break;
@@ -163,31 +129,54 @@ export default function Financial() {
     filtered.sort((a, b) => a.month.localeCompare(b.month));
   }
 
-  // ── Totalizadores ─────────────────────────────────────────────────────────────
+  // Totais usando calcReceived (valor real recebido)
   const totalReceived = filtered
     .filter(r => r.computedStatus === 'paid')
-    .reduce((s, r) => s + r.rent_value, 0);
-
+    .reduce((s, r) => s + calcReceived(r), 0);
   const totalToReceive = filtered
     .filter(r => r.computedStatus === 'pending')
     .reduce((s, r) => s + r.rent_value, 0);
-
   const totalOverdue = filtered
     .filter(r => r.computedStatus === 'overdue')
     .reduce((s, r) => s + r.rent_value, 0);
+  const totalOwed = filtered
+    .filter(r => r.paid)
+    .reduce((s, r) => s + calcOwed(r), 0);
 
-  async function updatePaymentDate(record: FinancialRecordDB, date: string) {
-    const paid = !!date;
-    await upsert.mutateAsync({ ...record, paid, payment_date: date || null, status: paid ? 'Pago' : 'Pendente' });
+  function openPaymentModal(record: FinancialRecordDB) {
+    setPaymentModal({
+      record,
+      date: new Date().toISOString().split('T')[0],
+      paidAmount: String(record.rent_value),
+      method: 'pix',
+    });
   }
 
-  async function togglePaid(record: FinancialRecordDB) {
-    const nowPaid = !record.paid;
+  async function confirmPayment() {
+    if (!paymentModal) return;
+    const paidAmt = parseFloat(paymentModal.paidAmount) || 0;
+    await upsert.mutateAsync({
+      ...paymentModal.record,
+      paid: true,
+      payment_date: paymentModal.date || new Date().toISOString().split('T')[0],
+      paid_amount: paidAmt,
+      payment_method: paymentModal.method,
+      status: 'Pago',
+    });
+    setPaymentModal(null);
+  }
+
+  async function unmarkPaid(record: FinancialRecordDB) {
     await upsert.mutateAsync({
       ...record,
-      paid: nowPaid,
-      payment_date: nowPaid ? new Date().toISOString().split('T')[0] : null,
-      status: nowPaid ? 'Pago' : 'Pendente',
+      paid: false,
+      payment_date: null,
+      paid_amount: null,
+      payment_method: null,
+      debt_paid_amount: null,
+      debt_payment_date: null,
+      debt_payment_method: null,
+      status: 'Pendente',
     });
   }
 
@@ -198,10 +187,7 @@ export default function Financial() {
 
   function SortHeader({ field, children }: { field: SortField; children: React.ReactNode }) {
     return (
-      <button
-        className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
-        onClick={() => toggleSort(field)}
-      >
+      <button className="inline-flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => toggleSort(field)}>
         {children}
         <ArrowUpDown className={`w-3 h-3 ${sortField === field ? 'text-primary' : 'text-muted-foreground/50'}`} />
       </button>
@@ -217,7 +203,7 @@ export default function Financial() {
         </div>
 
         {/* Cards de resumo */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
           <div className="stat-card">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">Recebido</p>
@@ -225,10 +211,8 @@ export default function Financial() {
                 <TrendingUp className="w-4 h-4" style={{ color: 'hsl(var(--paid))' }} />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>
-              {formatCurrency(totalReceived)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Pagamentos recebidos no mês</p>
+            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(totalReceived)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Valor efetivamente recebido</p>
           </div>
 
           <div className="stat-card">
@@ -238,10 +222,8 @@ export default function Financial() {
                 <DollarSign className="w-4 h-4" style={{ color: 'hsl(var(--warning))' }} />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--warning))' }}>
-              {formatCurrency(totalToReceive)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Vencimento ainda não chegou</p>
+            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--warning))' }}>{formatCurrency(totalToReceive)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Vencimento não chegou</p>
           </div>
 
           <div className="stat-card">
@@ -251,10 +233,21 @@ export default function Financial() {
                 <TrendingDown className="w-4 h-4" style={{ color: 'hsl(var(--overdue))' }} />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--overdue))' }}>
-              {formatCurrency(totalOverdue)}
-            </p>
+            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--overdue))' }}>{formatCurrency(totalOverdue)}</p>
             <p className="text-xs text-muted-foreground mt-1">Venceu e não pagou</p>
+          </div>
+
+          <div className="stat-card">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm text-muted-foreground">Devendo</p>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--overdue)/0.12)' }}>
+                <AlertTriangle className="w-4 h-4" style={{ color: 'hsl(var(--overdue))' }} />
+              </div>
+            </div>
+            <p className="text-xl md:text-2xl font-bold" style={{ color: totalOwed > 0 ? 'hsl(var(--overdue))' : 'hsl(var(--paid))' }}>
+              {formatCurrency(totalOwed)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Saldo devedor dos pagos</p>
           </div>
         </div>
 
@@ -262,11 +255,8 @@ export default function Financial() {
         <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
           <Select value={filterYear} onValueChange={setFilterYear}>
             <SelectTrigger className="w-24 h-9 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-            </SelectContent>
+            <SelectContent>{YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
           </Select>
-
           <Select value={filterMonth} onValueChange={setFilterMonth}>
             <SelectTrigger className="w-36 h-9 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -274,7 +264,6 @@ export default function Financial() {
               {MONTHS.map((m, i) => <SelectItem key={i} value={String(i)}>{m}</SelectItem>)}
             </SelectContent>
           </Select>
-
           <Select value={filterCondo} onValueChange={setFilterCondo}>
             <SelectTrigger className="w-44 h-9 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -282,7 +271,6 @@ export default function Financial() {
               {condominiums.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
-
           <Select value={filterStatus} onValueChange={setFilterStatus}>
             <SelectTrigger className="w-36 h-9 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -312,8 +300,11 @@ export default function Financial() {
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground"><SortHeader field="period">Período Ref.</SortHeader></th>
                   <th className="text-center px-4 py-3 font-medium text-muted-foreground">Vencimento</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Valor</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Pago</th>
+                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">Forma</th>
                   <th className="text-center px-4 py-3 font-medium text-muted-foreground"><SortHeader field="status">Status</SortHeader></th>
-                  <th className="text-center px-4 py-3 font-medium text-muted-foreground"><SortHeader field="payment_date">Data Pagamento</SortHeader></th>
+                  <th className="text-center px-4 py-3 font-medium text-muted-foreground"><SortHeader field="payment_date">Data Pag.</SortHeader></th>
+                  <th className="text-right px-4 py-3 font-medium" style={{ color: 'hsl(var(--overdue))' }}>Devendo</th>
                   <th className="text-center px-4 py-3 font-medium text-muted-foreground">Ações</th>
                 </tr>
               </thead>
@@ -322,6 +313,8 @@ export default function Financial() {
                   const contractStartDate = r.contract?.start_date ?? null;
                   const paymentDay = r.contract?.payment_day ?? 1;
                   const { periodLabel, dueDateLabel } = getPeriodAndDueDate(r.month, contractStartDate, paymentDay);
+                  const owed = calcOwed(r);
+                  const received = calcReceived(r);
                   return (
                     <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3">{r.condo?.name ?? '—'}</td>
@@ -330,20 +323,48 @@ export default function Financial() {
                       <td className="px-4 py-3 text-xs">{periodLabel}</td>
                       <td className="px-4 py-3 text-center text-xs">{dueDateLabel}</td>
                       <td className="px-4 py-3 text-right font-semibold">{formatCurrency(r.rent_value)}</td>
+                      <td className="px-4 py-3 text-right">
+                        {r.paid
+                          ? <span style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(received)}</span>
+                          : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-center text-xs text-muted-foreground">
+                        {r.payment_method === 'pix'
+                          ? <span className="inline-flex items-center gap-1"><Banknote className="w-3 h-3" />Pix</span>
+                          : r.payment_method === 'especie'
+                          ? <span className="inline-flex items-center gap-1"><Wallet className="w-3 h-3" />Espécie</span>
+                          : '—'}
+                      </td>
                       <td className="px-4 py-3 text-center">
-                        <button onClick={() => togglePaid(r)} className="cursor-pointer">
+                        <button
+                          onClick={() => r.paid ? unmarkPaid(r) : openPaymentModal(r)}
+                          className="cursor-pointer"
+                          title={r.paid ? 'Desmarcar pagamento' : 'Registrar pagamento'}
+                        >
                           {r.computedStatus === 'paid' && <span className="badge-paid"><CheckCircle className="w-3 h-3" />Pago</span>}
                           {r.computedStatus === 'pending' && <span className="badge-unpaid">A Receber</span>}
                           {r.computedStatus === 'overdue' && <span className="badge-overdue"><AlertCircle className="w-3 h-3" />Inadimplente</span>}
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <Input type="date" className="h-7 w-36 text-xs mx-auto" value={r.payment_date ?? ''} onChange={e => updatePaymentDate(r, e.target.value)} />
+                      <td className="px-4 py-3 text-center text-xs text-muted-foreground">
+                        {r.payment_date ?? '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right text-xs">
+                        {owed > 0
+                          ? <span style={{ color: 'hsl(var(--overdue))' }} className="font-semibold">{formatCurrency(owed)}</span>
+                          : <span className="text-muted-foreground">—</span>}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <button onClick={() => setReceiptRecord(r)} className="p-1.5 rounded-md hover:bg-muted transition-colors" title="Gerar recibo PDF" style={{ color: 'hsl(var(--primary))' }}>
-                          <Receipt className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          {r.paid && (
+                            <button onClick={() => unmarkPaid(r)} className="p-1.5 rounded-md hover:bg-muted transition-colors" title="Desfazer pagamento">
+                              <XCircle className="w-4 h-4 text-destructive" />
+                            </button>
+                          )}
+                          <button onClick={() => setReceiptRecord(r)} className="p-1.5 rounded-md hover:bg-muted transition-colors" title="Gerar recibo PDF" style={{ color: 'hsl(var(--primary))' }}>
+                            <Receipt className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -354,6 +375,7 @@ export default function Financial() {
         )}
       </div>
 
+      {/* Modal de Recibo */}
       {receiptRecord && receiptApt && receiptTenant && (
         <ReceiptModalDB
           open={!!receiptRecord}
@@ -366,6 +388,78 @@ export default function Financial() {
           condominiumName={receiptCondo?.name ?? ''}
         />
       )}
+
+      {/* ─── Modal de Pagamento ──────────────────────────────────────────────────── */}
+      <Dialog open={!!paymentModal} onOpenChange={() => setPaymentModal(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarDays className="w-5 h-5 text-primary" />
+              Registrar Pagamento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-4">
+            {paymentModal && (
+              <p className="text-xs text-muted-foreground">
+                {paymentModal.record.apt?.unit_number ?? ''} · Contrato: <strong>{formatCurrency(paymentModal.record.rent_value)}</strong>
+              </p>
+            )}
+
+            {/* Valor pago */}
+            <div>
+              <Label>Valor Pago (R$)</Label>
+              <Input
+                type="number" min="0" step="0.01" className="mt-1"
+                value={paymentModal?.paidAmount ?? ''}
+                onChange={e => setPaymentModal(prev => prev ? { ...prev, paidAmount: e.target.value } : null)}
+                autoFocus
+              />
+              {paymentModal && parseFloat(paymentModal.paidAmount) < paymentModal.record.rent_value && parseFloat(paymentModal.paidAmount) > 0 && (
+                <p className="text-xs mt-1 flex items-center gap-1" style={{ color: 'hsl(var(--overdue))' }}>
+                  <AlertTriangle className="w-3 h-3" />
+                  Ficará devendo {formatCurrency(paymentModal.record.rent_value - parseFloat(paymentModal.paidAmount))}
+                </p>
+              )}
+            </div>
+
+            {/* Forma de pagamento */}
+            <div>
+              <Label>Forma de Pagamento</Label>
+              <div className="flex gap-2 mt-1">
+                {(['pix', 'especie'] as PaymentMethod[]).map(m => (
+                  <button key={m}
+                    onClick={() => setPaymentModal(prev => prev ? { ...prev, method: m } : null)}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm transition-colors ${
+                      paymentModal?.method === m
+                        ? 'border-primary bg-primary/10 text-primary font-medium'
+                        : 'border-border hover:bg-muted'
+                    }`}
+                  >
+                    {m === 'pix' ? <Banknote className="w-4 h-4" /> : <Wallet className="w-4 h-4" />}
+                    {m === 'pix' ? 'Pix' : 'Espécie'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Data */}
+            <div>
+              <Label>Data do Pagamento</Label>
+              <Input type="date" className="mt-1"
+                value={paymentModal?.date ?? ''}
+                onChange={e => setPaymentModal(prev => prev ? { ...prev, date: e.target.value } : null)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPaymentModal(null)}>Cancelar</Button>
+            <Button onClick={confirmPayment} disabled={upsert.isPending}>
+              {upsert.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
