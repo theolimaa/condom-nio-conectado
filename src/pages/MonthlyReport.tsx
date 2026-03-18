@@ -7,7 +7,7 @@ import { formatCurrency, MONTHS, YEARS, getPeriodAndDueDate, getRecordStatus } f
 import { useCondominiums } from '@/hooks/useCondominiums';
 import { useApartments } from '@/hooks/useApartments';
 import { useTenants } from '@/hooks/useTenants';
-import { useFinancialRecordsByYear, FinancialRecordDB } from '@/hooks/useFinancial';
+import { useFinancialRecordsByYear, FinancialRecordDB, calcReceived, calcOwed } from '@/hooks/useFinancial';
 import { useContracts } from '@/hooks/useContracts';
 import jsPDF from 'jspdf';
 
@@ -105,7 +105,7 @@ export default function MonthlyReport() {
         return { apt, record: null, tenant: null, status: null, isVacant: !hasActiveTenant };
       });
 
-      const totalPaid = condoRecords.filter(r => r.computedStatus === 'paid').reduce((s, r) => s + r.rent_value, 0);
+      const totalPaid = condoRecords.filter(r => r.computedStatus === 'paid').reduce((s, r) => s + calcReceived(r), 0);
       const totalPending = condoRecords.filter(r => r.computedStatus === 'pending').reduce((s, r) => s + r.rent_value, 0);
       const totalOverdue = condoRecords.filter(r => r.computedStatus === 'overdue').reduce((s, r) => s + r.rent_value, 0);
       const occupied = condoApts.filter(apt => condoRecords.some(r => r.apartment_id === apt.id)).length;
