@@ -186,7 +186,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
       </div>
 
       {/* Cards de resumo */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="bg-muted/40 rounded-xl p-3">
           <p className="text-xs text-muted-foreground mb-1">Pago</p>
           <p className="font-bold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(totalPaid)}</p>
@@ -219,15 +219,15 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-muted/50 border-b border-border">
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Período Ref.</th>
-                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Vencimento</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">Valor</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">Pago</th>
-                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Forma</th>
-                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Data Pag.</th>
-                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Status</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground" style={{ color: 'hsl(var(--overdue))' }}>Devendo</th>
-                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Ações</th>
+                <th className="text-left px-3 py-3 font-medium text-muted-foreground">Período</th>
+                <th className="text-center px-3 py-3 font-medium text-muted-foreground hidden md:table-cell">Vencimento</th>
+                <th className="text-right px-3 py-3 font-medium text-muted-foreground">Valor</th>
+                <th className="text-right px-3 py-3 font-medium text-muted-foreground hidden sm:table-cell">Pago</th>
+                <th className="text-center px-3 py-3 font-medium text-muted-foreground hidden lg:table-cell">Forma</th>
+                <th className="text-center px-3 py-3 font-medium text-muted-foreground hidden sm:table-cell">Data Pag.</th>
+                <th className="text-center px-3 py-3 font-medium text-muted-foreground">Status</th>
+                <th className="text-right px-3 py-3 font-medium hidden sm:table-cell" style={{ color: 'hsl(var(--overdue))' }}>Devendo</th>
+                <th className="text-center px-3 py-3 font-medium text-muted-foreground">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -239,28 +239,28 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
 
                 return (
                   <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium text-xs">{periodLabel}</td>
-                    <td className="px-4 py-3 text-center text-xs">{dueDateLabel}</td>
-                    <td className="px-4 py-3 text-right font-semibold">{formatCurrency(r.rent_value)}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-3 py-3 font-medium text-xs">{periodLabel}</td>
+                    <td className="px-3 py-3 text-center text-xs hidden md:table-cell">{dueDateLabel}</td>
+                    <td className="px-3 py-3 text-right font-semibold">{formatCurrency(r.rent_value)}</td>
+                    <td className="px-3 py-3 text-right hidden sm:table-cell">
                       {r.paid ? (
                         <span style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(received)}</span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-3 py-3 text-center hidden lg:table-cell">
                       <MethodLabel method={r.payment_method} />
                     </td>
-                    <td className="px-4 py-3 text-center text-muted-foreground text-xs">
+                    <td className="px-3 py-3 text-center text-muted-foreground text-xs hidden sm:table-cell">
                       {r.payment_date ?? '—'}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-3 py-3 text-center">
                       {st === 'paid' && <span className="badge-paid"><CheckCircle className="w-3 h-3" /> Pago</span>}
                       {st === 'pending' && <span className="badge-unpaid">A vencer</span>}
                       {st === 'overdue' && <span className="badge-overdue"><AlertCircle className="w-3 h-3" /> Inadimplente</span>}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-3 py-3 text-right hidden sm:table-cell">
                       {owed > 0 ? (
                         <button
                           onClick={() => setDebtModal({
@@ -279,7 +279,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
                         <span className="text-muted-foreground text-xs">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => r.paid ? unmarkPaid(r) : openPaymentModal(r)}
