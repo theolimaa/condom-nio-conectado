@@ -209,19 +209,19 @@ export default function MonthlyReport() {
         </div>
 
         {/* Filtros */}
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex gap-2 flex-wrap">
           <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-24 sm:w-28"><SelectValue /></SelectTrigger>
             <SelectContent>{YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
           </Select>
 
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-32 sm:w-36"><SelectValue /></SelectTrigger>
             <SelectContent>{MONTHS.map((m, i) => <SelectItem key={i} value={String(i)}>{m}</SelectItem>)}</SelectContent>
           </Select>
 
           <Select value={selectedCondo} onValueChange={setSelectedCondo}>
-            <SelectTrigger className="w-52"><SelectValue placeholder="Todos os condomínios" /></SelectTrigger>
+            <SelectTrigger className="w-36 sm:w-52"><SelectValue placeholder="Todos os condomínios" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os condomínios</SelectItem>
               {condominiums.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
@@ -230,7 +230,7 @@ export default function MonthlyReport() {
         </div>
 
         {/* Resumo */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div className="stat-card">
             <p className="text-sm text-muted-foreground">Recebido</p>
             <p className="text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(grandPaid)}</p>
@@ -255,9 +255,9 @@ export default function MonthlyReport() {
           <div className="space-y-6">
             {grouped.map(g => (
               <div key={g.condo.id} className="bg-card border border-border rounded-xl overflow-x-auto">
-                <div className="flex items-center justify-between px-5 py-3 bg-muted/40 border-b border-border">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 bg-muted/40 border-b border-border gap-1">
                   <h2 className="font-semibold">{g.condo.name}</h2>
-                  <div className="flex gap-4 text-sm flex-wrap">
+                  <div className="flex gap-3 text-xs sm:text-sm flex-wrap">
                     <span className="text-muted-foreground">{g.occupied}/{g.total} ocupados</span>
                     <span style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(g.totalPaid)} recebido</span>
                     {g.totalPending > 0 && <span style={{ color: 'hsl(var(--warning))' }}>{formatCurrency(g.totalPending)} a receber</span>}
@@ -267,27 +267,27 @@ export default function MonthlyReport() {
                 <table className="w-full text-xs sm:text-sm">
                   <thead>
                     <tr className="text-xs text-muted-foreground border-b border-border">
-                      <th className="text-left px-4 py-2">Apto</th>
-                      <th className="text-left px-4 py-2">Inquilino</th>
-                      <th className="text-right px-4 py-2">Valor</th>
-                      <th className="text-center px-4 py-2">Pagamento</th>
-                      <th className="text-center px-4 py-2">Status</th>
+                      <th className="text-left px-3 py-2">Apto</th>
+                      <th className="text-left px-3 py-2 hidden sm:table-cell">Inquilino</th>
+                      <th className="text-right px-3 py-2">Valor</th>
+                      <th className="text-center px-3 py-2 hidden sm:table-cell">Pagamento</th>
+                      <th className="text-center px-3 py-2">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {g.rows.map(row => (
                       <tr key={row.apt.id} className="border-b border-border/50 last:border-0">
-                        <td className="px-4 py-2 font-medium">{row.apt.unit_number}</td>
-                        <td className="px-4 py-2 text-muted-foreground">
+                        <td className="px-3 py-2 font-medium">{row.apt.unit_number}</td>
+                        <td className="px-3 py-2 text-muted-foreground hidden sm:table-cell">
                           {row.tenant ? `${row.tenant.first_name} ${row.tenant.last_name}` : '—'}
                         </td>
-                        <td className="px-4 py-2 text-right font-semibold">
+                        <td className="px-3 py-2 text-right font-semibold">
                           {row.record ? formatCurrency(row.record.rent_value) : '—'}
                         </td>
-                        <td className="px-4 py-2 text-center text-xs text-muted-foreground">
+                        <td className="px-3 py-2 text-center text-xs text-muted-foreground hidden sm:table-cell">
                           {row.record?.payment_date ?? '—'}
                         </td>
-                        <td className="px-4 py-2 text-center">
+                        <td className="px-3 py-2 text-center">
                           {row.status === 'paid' && <span className="badge-active">Pago</span>}
                           {row.status === 'overdue' && <span className="badge-overdue">Inadimplente</span>}
                           {row.status === 'pending' && <span className="badge-unpaid">A Receber</span>}
