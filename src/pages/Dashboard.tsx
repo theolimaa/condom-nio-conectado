@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, Home, TrendingUp, TrendingDown, DollarSign, Pencil, Trash2, ArrowUpDown } from 'lucide-react';
+import { Plus, Building2, Home, TrendingUp, TrendingDown, DollarSign, Pencil, Trash2, ArrowUpDown, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -13,7 +13,7 @@ import GlobalFilter from '@/components/GlobalFilter';
 import Layout from '@/components/Layout';
 import { useCondominiums, useAddCondominium, useUpdateCondominium, useDeleteCondominium, CondominiumDB } from '@/hooks/useCondominiums';
 import { useApartments } from '@/hooks/useApartments';
-import { useAllFinancialRecords, FinancialRecordDB } from '@/hooks/useFinancial';
+import { useAllFinancialRecords, FinancialRecordDB, calcReceived, calcOwed } from '@/hooks/useFinancial';
 import { useContracts } from '@/hooks/useContracts';
 import { useTenants } from '@/hooks/useTenants';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -78,7 +78,7 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
   open: boolean; onClose: () => void; title: string;
   records: (FinancialRecordDB & { computedStatus: string })[]; tenants: { id: string; first_name: string; last_name: string }[];
   apartments: { id: string; unit_number: string; condominium_id: string }[]; condominiums: { id: string; name: string }[];
-  variant: 'pending' | 'overdue' | 'received';
+  variant: 'pending' | 'overdue' | 'received' | 'debt';
 }) {
   const [sortField, setSortField] = useState<ModalSortField | null>(null);
   const [sortDir, setSortDir] = useState<ModalSortDir>('asc');
@@ -104,7 +104,7 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
     const condo = apt ? condominiums.find(c => c.id === apt.condominium_id) : null;
     const contract = contracts.find(ct => ct.id === r.contract_id);
     let dateCol: string;
-    if (variant === 'received') {
+    if (variant === 'received' || variant === 'debt') {
       dateCol = r.payment_date ?? '-';
     } else {
       const { dueDateLabel } = getPeriodAndDueDate(r.month, contract?.start_date ?? null, contract?.payment_day ?? 1, contract?.desired_payment_day, contract?.desired_payment_date);
@@ -121,7 +121,7 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
     return sortDir === 'asc' ? cmp : -cmp;
   }) : enriched;
 
-  const lastColLabel = variant === 'received' ? 'Data Pagamento' : 'Vencimento';
+  const lastColLabel = variant === 'received' || variant === 'debt' ? 'Data Pagamento' : 'Vencimento';
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -161,7 +161,7 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
                       <td className="px-3 py-2">{r.condo?.name ?? '-'}</td>
                       <td className="px-3 py-2">{r.apt?.unit_number ?? '-'}</td>
                       <td className="px-3 py-2">{t ? `${t.first_name} ${t.last_name}` : '-'}</td>
-                      <td className="px-3 py-2 text-right font-semibold">{formatCurrency(r.rent_value)}</td>
+                      <td className="px-3 py-2 text-right font-semibold">{formatCurrency(variant === 'received' ? calcReceived(r) : variant === 'debt' ? calcOwed(r) : r.rent_value)}</td>
                       <td className="px-3 py-2 text-center text-xs">{r.dateCol}</td>
                     </tr>
                   );
@@ -184,6 +184,7 @@ export default function Dashboard() {
   const [pendingModal, setPendingModal] = useState(false);
   const [overdueModal, setOverdueModal] = useState(false);
   const [receivedModal, setReceivedModal] = useState(false);
+  const [debtModal, setDebtModal] = useState(false);
 
   const { data: condominiums = [], isLoading: loadingConds } = useCondominiums();
   const { data: apartments = [] } = useApartments();
@@ -249,9 +250,20 @@ export default function Dashboard() {
     return r.dueDateMonth?.startsWith(String(selectedYear)) ?? false;
   });
 
-  const totalReceived = receivedRecords.reduce((s, r) => s + r.rent_value, 0);
+  const totalReceived = receivedRecords.reduce((s, r) => s + calcReceived(r), 0);
   const totalPending = pendingRecords.reduce((s, r) => s + r.rent_value, 0);
   const totalOverdue = overdueRecords.reduce((s, r) => s + r.rent_value, 0);
+
+  // Devendo: registros pagos parcialmente (paid=true mas paid_amount < rent_value)
+  // Filtra pelo mês do pagamento, igual ao Recebido
+  const debtRecords = enrichedRecords.filter(r => {
+    if (!r.paid || !r.paymentMonth) return false;
+    const owed = calcOwed(r);
+    if (owed <= 0) return false;
+    if (selectedMonthKey) return r.paymentMonth === selectedMonthKey;
+    return r.paymentMonth.startsWith(String(selectedYear));
+  });
+  const totalOwed = debtRecords.reduce((s, r) => s + calcOwed(r), 0);
 
   // Gráfico mensal
   const chartData = MONTHS.map((month, idx) => {
@@ -259,7 +271,7 @@ export default function Dashboard() {
     const matchCondo = (r: typeof enrichedRecords[0]) =>
       chartCondo === 'all' || apartments.find(a => a.id === r.apartment_id)?.condominium_id === chartCondo;
 
-    const rec = enrichedRecords.filter(r => r.paid && r.paymentMonth === monthKey && matchCondo(r)).reduce((s, r) => s + r.rent_value, 0);
+    const rec = enrichedRecords.filter(r => r.paid && r.paymentMonth === monthKey && matchCondo(r)).reduce((s, r) => s + calcReceived(r), 0);
     const pend = enrichedRecords.filter(r => r.computedStatus === 'pending' && r.dueDateMonth === monthKey && matchCondo(r)).reduce((s, r) => s + r.rent_value, 0);
     const over = enrichedRecords.filter(r => r.computedStatus === 'overdue' && r.dueDateMonth === monthKey && matchCondo(r)).reduce((s, r) => s + r.rent_value, 0);
     return { month: month.substring(0, 3), receita: rec, aReceber: pend, inadimplente: over };
@@ -293,7 +305,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
           <div className="stat-card cursor-pointer hover:shadow-md transition-shadow" onClick={() => setReceivedModal(true)}>
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">Receita Recebida</p>
@@ -324,6 +336,17 @@ export default function Dashboard() {
               </div>
             </div>
             <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--overdue))' }}>{formatCurrency(totalOverdue)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes · {filterLabel} {selectedYear}</p>
+          </div>
+
+          <div className="stat-card cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDebtModal(true)}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm text-muted-foreground">Devendo</p>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--overdue)/0.12)' }}>
+                <AlertTriangle className="w-4 h-4" style={{ color: 'hsl(var(--overdue))' }} />
+              </div>
+            </div>
+            <p className="text-xl md:text-2xl font-bold" style={{ color: totalOwed > 0 ? 'hsl(var(--overdue))' : 'hsl(var(--paid))' }}>{formatCurrency(totalOwed)}</p>
             <p className="text-xs text-muted-foreground mt-1">Clique para detalhes · {filterLabel} {selectedYear}</p>
           </div>
 
@@ -392,7 +415,7 @@ export default function Dashboard() {
                 const condApts = apartments.filter(a => a.condominium_id === cond.id);
                 const condReceived = receivedRecords
                   .filter(r => condApts.some(a => a.id === r.apartment_id))
-                  .reduce((s, r) => s + r.rent_value, 0);
+                  .reduce((s, r) => s + calcReceived(r), 0);
                 return (
                   // CARD INTEIRO clicável
                   <div
@@ -442,6 +465,17 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      <DetailModal
+        open={debtModal}
+        onClose={() => setDebtModal(false)}
+        title={`Devendo — ${filterLabel} ${selectedYear}`}
+        records={debtRecords}
+        tenants={allTenants}
+        apartments={apartments}
+        condominiums={condominiums}
+        variant="debt"
+      />
 
       <CondominiumModal open={showAdd} onClose={() => setShowAdd(false)} />
       {editCond && <CondominiumModal open={!!editCond} onClose={() => setEditCond(null)} initial={editCond} />}
