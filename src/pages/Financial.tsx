@@ -203,7 +203,7 @@ export default function Financial() {
         </div>
 
         {/* Cards de resumo */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="stat-card">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">Recebido</p>
@@ -252,9 +252,9 @@ export default function Financial() {
         </div>
 
         {/* Filtros */}
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           <Select value={filterYear} onValueChange={setFilterYear}>
-            <SelectTrigger className="w-24 h-9 text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-20 h-9 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>{YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
           </Select>
           <Select value={filterMonth} onValueChange={setFilterMonth}>
@@ -294,18 +294,18 @@ export default function Financial() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground"><SortHeader field="condo">Condomínio</SortHeader></th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground"><SortHeader field="apt">Apto</SortHeader></th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground"><SortHeader field="tenant">Inquilino</SortHeader></th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground"><SortHeader field="period">Período Ref.</SortHeader></th>
-                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">Vencimento</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Valor</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Pago</th>
-                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">Forma</th>
-                  <th className="text-center px-4 py-3 font-medium text-muted-foreground"><SortHeader field="status">Status</SortHeader></th>
-                  <th className="text-center px-4 py-3 font-medium text-muted-foreground"><SortHeader field="payment_date">Data Pag.</SortHeader></th>
-                  <th className="text-right px-4 py-3 font-medium" style={{ color: 'hsl(var(--overdue))' }}>Devendo</th>
-                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">Ações</th>
+                  <th className="text-left px-3 py-3 font-medium text-muted-foreground hidden md:table-cell"><SortHeader field="condo">Condomínio</SortHeader></th>
+                  <th className="text-left px-3 py-3 font-medium text-muted-foreground"><SortHeader field="apt">Apto</SortHeader></th>
+                  <th className="text-left px-3 py-3 font-medium text-muted-foreground hidden sm:table-cell"><SortHeader field="tenant">Inquilino</SortHeader></th>
+                  <th className="text-left px-3 py-3 font-medium text-muted-foreground hidden lg:table-cell"><SortHeader field="period">Período Ref.</SortHeader></th>
+                  <th className="text-center px-3 py-3 font-medium text-muted-foreground hidden lg:table-cell">Vencimento</th>
+                  <th className="text-right px-3 py-3 font-medium text-muted-foreground">Valor</th>
+                  <th className="text-right px-3 py-3 font-medium text-muted-foreground hidden sm:table-cell">Pago</th>
+                  <th className="text-center px-3 py-3 font-medium text-muted-foreground hidden xl:table-cell">Forma</th>
+                  <th className="text-center px-3 py-3 font-medium text-muted-foreground"><SortHeader field="status">Status</SortHeader></th>
+                  <th className="text-center px-3 py-3 font-medium text-muted-foreground hidden md:table-cell"><SortHeader field="payment_date">Data Pag.</SortHeader></th>
+                  <th className="text-right px-3 py-3 font-medium hidden sm:table-cell" style={{ color: 'hsl(var(--overdue))' }}>Devendo</th>
+                  <th className="text-center px-3 py-3 font-medium text-muted-foreground">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -317,25 +317,25 @@ export default function Financial() {
                   const received = calcReceived(r);
                   return (
                     <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-3">{r.condo?.name ?? '—'}</td>
-                      <td className="px-4 py-3 font-medium">{r.apt?.unit_number ?? '—'}</td>
-                      <td className="px-4 py-3">{r.tenant ? `${r.tenant.first_name} ${r.tenant.last_name}` : '—'}</td>
-                      <td className="px-4 py-3 text-xs">{periodLabel}</td>
-                      <td className="px-4 py-3 text-center text-xs">{dueDateLabel}</td>
-                      <td className="px-4 py-3 text-right font-semibold">{formatCurrency(r.rent_value)}</td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-3 hidden md:table-cell">{r.condo?.name ?? '—'}</td>
+                      <td className="px-3 py-3 font-medium">{r.apt?.unit_number ?? '—'}</td>
+                      <td className="px-3 py-3 hidden sm:table-cell">{r.tenant ? `${r.tenant.first_name} ${r.tenant.last_name}` : '—'}</td>
+                      <td className="px-3 py-3 text-xs hidden lg:table-cell">{periodLabel}</td>
+                      <td className="px-3 py-3 text-center text-xs hidden lg:table-cell">{dueDateLabel}</td>
+                      <td className="px-3 py-3 text-right font-semibold">{formatCurrency(r.rent_value)}</td>
+                      <td className="px-3 py-3 text-right hidden sm:table-cell">
                         {r.paid
                           ? <span style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(received)}</span>
                           : <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-center text-xs text-muted-foreground">
+                      <td className="px-3 py-3 text-center text-xs text-muted-foreground hidden xl:table-cell">
                         {r.payment_method === 'pix'
                           ? <span className="inline-flex items-center gap-1"><Banknote className="w-3 h-3" />Pix</span>
                           : r.payment_method === 'especie'
                           ? <span className="inline-flex items-center gap-1"><Wallet className="w-3 h-3" />Espécie</span>
                           : '—'}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-3 py-3 text-center">
                         <button
                           onClick={() => r.paid ? unmarkPaid(r) : openPaymentModal(r)}
                           className="cursor-pointer"
@@ -346,15 +346,15 @@ export default function Financial() {
                           {r.computedStatus === 'overdue' && <span className="badge-overdue"><AlertCircle className="w-3 h-3" />Inadimplente</span>}
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-center text-xs text-muted-foreground">
+                      <td className="px-3 py-3 text-center text-xs text-muted-foreground hidden md:table-cell">
                         {r.payment_date ?? '—'}
                       </td>
-                      <td className="px-4 py-3 text-right text-xs">
+                      <td className="px-3 py-3 text-right text-xs hidden sm:table-cell">
                         {owed > 0
                           ? <span style={{ color: 'hsl(var(--overdue))' }} className="font-semibold">{formatCurrency(owed)}</span>
                           : <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-3 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
                           {r.paid && (
                             <button onClick={() => unmarkPaid(r)} className="p-1.5 rounded-md hover:bg-muted transition-colors" title="Desfazer pagamento">
