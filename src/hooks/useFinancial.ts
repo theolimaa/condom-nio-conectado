@@ -13,12 +13,33 @@ export interface FinancialRecordDB {
   rent_value: number;
   paid: boolean | null;
   payment_date: string | null;
+  paid_amount: number | null;        // valor efetivamente pago (pode ser < rent_value)
+  payment_method: string | null;     // 'pix' | 'especie'
+  debt_paid_amount: number | null;   // pagamento posterior do saldo devedor
+  debt_payment_date: string | null;
+  debt_payment_method: string | null;
   status: string | null;
   observations: string | null;
   receipt_number: string | null;
   receipt_generated_at: string | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+/** Saldo devedor = rent_value - paid_amount - debt_paid_amount */
+export function calcOwed(r: FinancialRecordDB): number {
+  if (!r.paid) return r.rent_value;
+  const paid = r.paid_amount ?? r.rent_value;
+  const debtPaid = r.debt_paid_amount ?? 0;
+  return Math.max(0, r.rent_value - paid - debtPaid);
+}
+
+/** Valor total efetivamente recebido de um registro */
+export function calcReceived(r: FinancialRecordDB): number {
+  if (!r.paid) return 0;
+  const paid = r.paid_amount ?? r.rent_value;
+  const debtPaid = r.debt_paid_amount ?? 0;
+  return Math.min(r.rent_value, paid + debtPaid);
 }
 
 export function useFinancialRecords(apartmentId: string) {
@@ -30,33 +51,12 @@ export function useFinancialRecords(apartmentId: string) {
         .from('financial_records')
         .select('*')
         .eq('apartment_id', apartmentId)
-        .order('month', { ascending: true });
+        .order('month', { ascending: true })
+        .limit(10000);
       if (error) throw error;
       return data as FinancialRecordDB[];
     },
     enabled: !!user && !!apartmentId,
-  });
-}
-
-/**
- * Busca registros financeiros de UM ANO ESPECÍFICO.
- * Evita o limite do Supabase buscando ~400 registros em vez de 6000+.
- */
-export function useFinancialRecordsByYear(year: number) {
-  const { user } = useAuth();
-  return useQuery({
-    queryKey: ['financial_records_year', user?.id, year],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('financial_records')
-        .select('*')
-        .gte('month', `${year}-01`)
-        .lte('month', `${year}-12`)
-        .order('month', { ascending: true });
-      if (error) throw error;
-      return data as FinancialRecordDB[];
-    },
-    enabled: !!user && !!year,
   });
 }
 
@@ -67,7 +67,26 @@ export function useAllFinancialRecords() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('financial_records')
+        .select('*, apartments!inner(condominium_id, condominiums!inner(user_id))')
+        .order('month', { ascending: true })
+        .limit(50000);
+      if (error) throw error;
+      return data as FinancialRecordDB[];
+    },
+    enabled: !!user,
+  });
+}
+
+export function useFinancialRecordsByYear(year: number) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['financial_records_year', year, user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('financial_records')
         .select('*')
+        .gte('month', `${year}-01`)
+        .lte('month', `${year}-12`)
         .order('month', { ascending: true })
         .limit(50000);
       if (error) throw error;
@@ -104,8 +123,8 @@ export function useUpsertFinancialRecord() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['financial_records', data.apartment_id] });
-      qc.invalidateQueries({ queryKey: ['financial_records_year'] });
       qc.invalidateQueries({ queryKey: ['financial_records_all'] });
+      qc.invalidateQueries({ queryKey: ['financial_records_year'] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -121,8 +140,8 @@ export function useDeleteFinancialRecord() {
     },
     onSuccess: (apartmentId) => {
       qc.invalidateQueries({ queryKey: ['financial_records', apartmentId] });
-      qc.invalidateQueries({ queryKey: ['financial_records_year'] });
       qc.invalidateQueries({ queryKey: ['financial_records_all'] });
+      qc.invalidateQueries({ queryKey: ['financial_records_year'] });
       toast.success('Registro removido!');
     },
     onError: (e: Error) => toast.error(e.message),
@@ -132,7 +151,9 @@ export function useDeleteFinancialRecord() {
 export function useUpdateUnpaidRentValues() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ contractId, apartmentId, rentValue }: { contractId: string; apartmentId: string; rentValue: number }) => {
+    mutationFn: async ({
+      contractId, apartmentId, rentValue,
+    }: { contractId: string; apartmentId: string; rentValue: number }) => {
       const { error } = await supabase
         .from('financial_records')
         .update({ rent_value: rentValue })
@@ -143,8 +164,8 @@ export function useUpdateUnpaidRentValues() {
     },
     onSuccess: (apartmentId) => {
       qc.invalidateQueries({ queryKey: ['financial_records', apartmentId] });
-      qc.invalidateQueries({ queryKey: ['financial_records_year'] });
       qc.invalidateQueries({ queryKey: ['financial_records_all'] });
+      qc.invalidateQueries({ queryKey: ['financial_records_year'] });
     },
     onError: (e: Error) => toast.error(`Erro ao atualizar valores: ${e.message}`),
   });
@@ -175,6 +196,11 @@ export function generateMonthsForContract(
       rent_value: rentValue,
       paid: false,
       payment_date: null,
+      paid_amount: null,
+      payment_method: null,
+      debt_paid_amount: null,
+      debt_payment_date: null,
+      debt_payment_method: null,
       status: 'Pendente',
       observations: null,
       receipt_number: null,
@@ -185,11 +211,6 @@ export function generateMonthsForContract(
   return records;
 }
 
-/**
- * Gera períodos financeiros mensais até Dez/2045.
- * CORREÇÃO: checa meses existentes por apartment_id (não só contract_id)
- * para evitar duplicatas quando o registro pago tem contract_id diferente/nulo.
- */
 export function useBulkGeneratePeriods() {
   const qc = useQueryClient();
   return useMutation({
@@ -199,20 +220,14 @@ export function useBulkGeneratePeriods() {
       apartmentId: string; tenantId: string; contractId: string;
       startDate: string; rentValue: number; paymentDay: number;
     }) => {
-      // ✅ CORREÇÃO: busca por apartment_id para pegar TODOS os registros do apto,
-      // incluindo os que têm contract_id nulo ou de contrato anterior
       const { data: existing } = await supabase
         .from('financial_records')
         .select('month')
-        .eq('apartment_id', apartmentId);
+        .eq('contract_id', contractId)
+        .limit(10000);
 
       const existingMonths = new Set((existing ?? []).map(r => r.month));
-
-      const allRecords = generateMonthsForContract(
-        apartmentId, tenantId, contractId, startDate, rentValue, paymentDay
-      );
-
-      // Só insere meses que não existem de forma alguma para este apartamento
+      const allRecords = generateMonthsForContract(apartmentId, tenantId, contractId, startDate, rentValue, paymentDay);
       const newRecords = allRecords.filter(r => !existingMonths.has(r.month));
 
       if (newRecords.length === 0) return 0;
@@ -226,9 +241,9 @@ export function useBulkGeneratePeriods() {
     },
     onSuccess: (count) => {
       qc.invalidateQueries({ queryKey: ['financial_records'] });
-      qc.invalidateQueries({ queryKey: ['financial_records_year'] });
       qc.invalidateQueries({ queryKey: ['financial_records_all'] });
-      if (count && count > 0) toast.success(`${count} períodos financeiros gerados!`);
+      qc.invalidateQueries({ queryKey: ['financial_records_year'] });
+      if (count > 0) toast.success(`${count} períodos financeiros gerados!`);
     },
     onError: (e: Error) => toast.error(`Erro ao gerar períodos: ${e.message}`),
   });
