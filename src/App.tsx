@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppProvider } from "@/lib/store";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { useSessionTimeout } from "@/hooks/useSessionTimeout";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import ForgotPassword from "./pages/auth/ForgotPassword";
@@ -21,6 +22,11 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+function SessionGuard({ children }: { children: React.ReactNode }) {
+  useSessionTimeout();
+  return <>{children}</>;
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading)
@@ -30,7 +36,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   if (!user) return <Navigate to="/login" replace />;
-  return <>{children}</>;
+  return <SessionGuard>{children}</SessionGuard>;
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
