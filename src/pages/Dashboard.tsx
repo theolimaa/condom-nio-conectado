@@ -305,7 +305,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4">
           <div className="stat-card cursor-pointer hover:shadow-md transition-shadow" onClick={() => setReceivedModal(true)}>
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">Receita Recebida</p>
