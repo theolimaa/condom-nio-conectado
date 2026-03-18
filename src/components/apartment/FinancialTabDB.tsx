@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { CheckCircle, XCircle, AlertCircle, Receipt, Loader2, CalendarDays } from 'lucide-react';
+import {
+  CheckCircle, XCircle, AlertCircle, Receipt, Loader2,
+  CalendarDays, Banknote, Wallet, AlertTriangle,
+} from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -7,12 +10,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { useApp } from '@/lib/store';
 import { formatCurrency, MONTHS, YEARS, getPeriodAndDueDate, getRecordStatus } from '@/lib/utils-app';
-import { useFinancialRecords, useUpsertFinancialRecord, FinancialRecordDB } from '@/hooks/useFinancial';
+import {
+  useFinancialRecords, useUpsertFinancialRecord, FinancialRecordDB,
+  calcOwed, calcReceived,
+} from '@/hooks/useFinancial';
 import { useContract } from '@/hooks/useContracts';
 import { useTenants } from '@/hooks/useTenants';
 import { useApartment } from '@/hooks/useApartments';
 import { useCondominiums } from '@/hooks/useCondominiums';
 import ReceiptModalDB from './ReceiptModalDB';
+
+type PaymentMethod = 'pix' | 'especie';
+
+function MethodLabel({ method }: { method: string | null }) {
+  if (!method) return <span className="text-muted-foreground">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1 text-xs">
+      {method === 'pix'
+        ? <><Banknote className="w-3 h-3" /> Pix</>
+        : <><Wallet className="w-3 h-3" /> Espécie</>}
+    </span>
+  );
+}
 
 function getStatus(
   record: FinancialRecordDB,
@@ -33,20 +52,37 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
   const { data: contract } = useContract(tenantId);
   const { data: apartment } = useApartment(apartmentId);
   const { data: condominiums = [] } = useCondominiums();
-  const condominiumName = apartment ? (condominiums.find(c => c.id === apartment.condominium_id)?.name ?? '') : '';
+  const condominiumName = apartment
+    ? (condominiums.find(c => c.id === apartment.condominium_id)?.name ?? '')
+    : '';
   const { data: tenants = [] } = useTenants(apartmentId);
   const upsert = useUpsertFinancialRecord();
+
   const [filterYear, setFilterYear] = useState(String(state.selectedYear));
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [receiptRecord, setReceiptRecord] = useState<FinancialRecordDB | null>(null);
-  const [paymentModal, setPaymentModal] = useState<{ record: FinancialRecordDB; date: string } | null>(null);
+
+  // Modal de registro de pagamento
+  const [paymentModal, setPaymentModal] = useState<{
+    record: FinancialRecordDB;
+    date: string;
+    paidAmount: string;
+    method: PaymentMethod;
+  } | null>(null);
+
+  // Modal de registro de dívida (pagamento posterior do saldo)
+  const [debtModal, setDebtModal] = useState<{
+    record: FinancialRecordDB;
+    date: string;
+    amount: string;
+    method: PaymentMethod;
+  } | null>(null);
 
   const paymentDay = contract?.payment_day ?? 1;
   const contractStartDate = contract?.start_date ?? null;
   const desiredPaymentDay = contract?.desired_payment_day ?? null;
   const desiredPaymentDate = contract?.desired_payment_date ?? null;
 
-  // Filtrar registros anteriores ao início do contrato
   const contractStartMonth = contractStartDate ? contractStartDate.substring(0, 7) : null;
   const tenantRecords = records.filter(r =>
     r.tenant_id === tenantId &&
@@ -54,17 +90,12 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
   );
   const currentTenant = tenants.find(t => t.id === tenantId);
 
-  // Filtrar e ordenar
   const filteredRecords = tenantRecords.filter(r => {
-    // Ignorar registros com formato antigo de month (ex: "2026-01-03_2026-02-03")
     if (r.month.includes('_') || r.month.length > 7) return false;
     const [y, m] = r.month.split('-').map(Number);
-    const matchYear = y === Number(filterYear);
-    const matchMonth = filterMonth === 'all' || m - 1 === Number(filterMonth);
-    return matchYear && matchMonth;
+    return y === Number(filterYear) && (filterMonth === 'all' || m - 1 === Number(filterMonth));
   }).sort((a, b) => a.month.localeCompare(b.month));
 
-  // Dedup defensivo por month
   const seen = new Map<string, FinancialRecordDB>();
   for (const r of filteredRecords) {
     const existing = seen.get(r.month);
@@ -72,32 +103,72 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
   }
   const dedupedRecords = Array.from(seen.values()).sort((a, b) => a.month.localeCompare(b.month));
 
-  const totalPaid = dedupedRecords.filter(r => r.paid).reduce((s, r) => s + r.rent_value, 0);
-  const totalOverdue = dedupedRecords.filter(r => getStatus(r, paymentDay, contractStartDate, desiredPaymentDay, desiredPaymentDate) === 'overdue').reduce((s, r) => s + r.rent_value, 0);
-  const totalPending = dedupedRecords.filter(r => !r.paid && getStatus(r, paymentDay, contractStartDate, desiredPaymentDay, desiredPaymentDate) === 'pending').reduce((s, r) => s + r.rent_value, 0);
+  // Totais usando calcReceived (respeita paid_amount parcial)
+  const totalPaid = dedupedRecords.reduce((s, r) => s + calcReceived(r), 0);
+  const totalOwed = dedupedRecords.filter(r => r.paid).reduce((s, r) => s + calcOwed(r), 0);
+  const totalOverdue = dedupedRecords
+    .filter(r => getStatus(r, paymentDay, contractStartDate, desiredPaymentDay, desiredPaymentDate) === 'overdue')
+    .reduce((s, r) => s + r.rent_value, 0);
+  const totalPending = dedupedRecords
+    .filter(r => !r.paid && getStatus(r, paymentDay, contractStartDate, desiredPaymentDay, desiredPaymentDate) === 'pending')
+    .reduce((s, r) => s + r.rent_value, 0);
 
-  async function togglePaid(record: FinancialRecordDB) {
-    if (!record.paid) {
-      setPaymentModal({ record, date: new Date().toISOString().split('T')[0] });
-    } else {
-      await upsert.mutateAsync({ ...record, paid: false, payment_date: null, status: 'Pendente' });
-    }
+  // Abrir modal de pagamento
+  function openPaymentModal(record: FinancialRecordDB) {
+    setPaymentModal({
+      record,
+      date: new Date().toISOString().split('T')[0],
+      paidAmount: String(record.rent_value),
+      method: 'pix',
+    });
   }
 
+  // Confirmar pagamento
   async function confirmPayment() {
     if (!paymentModal) return;
+    const paidAmt = parseFloat(paymentModal.paidAmount) || 0;
     await upsert.mutateAsync({
       ...paymentModal.record,
       paid: true,
       payment_date: paymentModal.date || new Date().toISOString().split('T')[0],
+      paid_amount: paidAmt,
+      payment_method: paymentModal.method,
       status: 'Pago',
     });
     setPaymentModal(null);
   }
 
+  // Desmarcar pagamento
+  async function unmarkPaid(record: FinancialRecordDB) {
+    await upsert.mutateAsync({
+      ...record,
+      paid: false,
+      payment_date: null,
+      paid_amount: null,
+      payment_method: null,
+      debt_paid_amount: null,
+      debt_payment_date: null,
+      debt_payment_method: null,
+      status: 'Pendente',
+    });
+  }
+
+  // Confirmar pagamento de dívida
+  async function confirmDebtPayment() {
+    if (!debtModal) return;
+    const amt = parseFloat(debtModal.amount) || 0;
+    await upsert.mutateAsync({
+      ...debtModal.record,
+      debt_paid_amount: amt,
+      debt_payment_date: debtModal.date || new Date().toISOString().split('T')[0],
+      debt_payment_method: debtModal.method,
+    });
+    setDebtModal(null);
+  }
+
   return (
     <div className="space-y-4">
-      {/* Filters */}
+      {/* Filtros */}
       <div className="flex items-center gap-2">
         <Select value={filterYear} onValueChange={setFilterYear}>
           <SelectTrigger className="w-24 h-8 text-sm"><SelectValue /></SelectTrigger>
@@ -114,8 +185,8 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
         </Select>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* Cards de resumo */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-muted/40 rounded-xl p-3">
           <p className="text-xs text-muted-foreground mb-1">Pago</p>
           <p className="font-bold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(totalPaid)}</p>
@@ -128,14 +199,20 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
           <p className="text-xs text-muted-foreground mb-1">Inadimplente</p>
           <p className="font-bold" style={{ color: 'hsl(var(--overdue))' }}>{formatCurrency(totalOverdue)}</p>
         </div>
+        <div className="bg-muted/40 rounded-xl p-3">
+          <p className="text-xs text-muted-foreground mb-1">Devendo</p>
+          <p className="font-bold" style={{ color: totalOwed > 0 ? 'hsl(var(--overdue))' : 'hsl(var(--paid))' }}>
+            {formatCurrency(totalOwed)}
+          </p>
+        </div>
       </div>
 
-      {/* Records table */}
+      {/* Tabela */}
       {isLoading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
       ) : dedupedRecords.length === 0 ? (
         <div className="text-center py-10 text-muted-foreground">
-          <p>Nenhum período encontrado. Os períodos são gerados automaticamente ao salvar o contrato.</p>
+          <p>Nenhum período encontrado.</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border">
@@ -145,8 +222,11 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Período Ref.</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Vencimento</th>
                 <th className="text-right px-4 py-3 font-medium text-muted-foreground">Valor</th>
-                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Pagamento</th>
+                <th className="text-right px-4 py-3 font-medium text-muted-foreground">Pago</th>
+                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Forma</th>
+                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Data Pag.</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Status</th>
+                <th className="text-right px-4 py-3 font-medium text-muted-foreground" style={{ color: 'hsl(var(--overdue))' }}>Devendo</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Ações</th>
               </tr>
             </thead>
@@ -154,25 +234,57 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
               {dedupedRecords.map(r => {
                 const st = getStatus(r, paymentDay, contractStartDate, desiredPaymentDay, desiredPaymentDate);
                 const { periodLabel, dueDateLabel } = getPeriodAndDueDate(r.month, contractStartDate, paymentDay, desiredPaymentDay, desiredPaymentDate);
+                const owed = calcOwed(r);
+                const received = calcReceived(r);
+
                 return (
                   <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 font-medium text-xs">{periodLabel}</td>
                     <td className="px-4 py-3 text-center text-xs">{dueDateLabel}</td>
                     <td className="px-4 py-3 text-right font-semibold">{formatCurrency(r.rent_value)}</td>
-                    <td className="px-4 py-3 text-center text-muted-foreground">
-                      {r.payment_date ? r.payment_date : '-'}
+                    <td className="px-4 py-3 text-right">
+                      {r.paid ? (
+                        <span style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(received)}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <MethodLabel method={r.payment_method} />
+                    </td>
+                    <td className="px-4 py-3 text-center text-muted-foreground text-xs">
+                      {r.payment_date ?? '—'}
                     </td>
                     <td className="px-4 py-3 text-center">
                       {st === 'paid' && <span className="badge-paid"><CheckCircle className="w-3 h-3" /> Pago</span>}
                       {st === 'pending' && <span className="badge-unpaid">A vencer</span>}
                       {st === 'overdue' && <span className="badge-overdue"><AlertCircle className="w-3 h-3" /> Inadimplente</span>}
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      {owed > 0 ? (
+                        <button
+                          onClick={() => setDebtModal({
+                            record: r,
+                            date: new Date().toISOString().split('T')[0],
+                            amount: String(owed),
+                            method: 'pix',
+                          })}
+                          className="text-xs font-semibold hover:underline"
+                          style={{ color: 'hsl(var(--overdue))' }}
+                          title="Registrar pagamento do saldo"
+                        >
+                          {formatCurrency(owed)}
+                        </button>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
                         <button
-                          onClick={() => togglePaid(r)}
+                          onClick={() => r.paid ? unmarkPaid(r) : openPaymentModal(r)}
                           className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground"
-                          title={r.paid ? 'Marcar como não pago' : 'Marcar como pago'}
+                          title={r.paid ? 'Desmarcar pagamento' : 'Registrar pagamento'}
                         >
                           {r.paid
                             ? <XCircle className="w-4 h-4 text-destructive" />
@@ -196,7 +308,7 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
         </div>
       )}
 
-      {/* Receipt Modal */}
+      {/* Modal de Recibo */}
       {receiptRecord && apartment && currentTenant && (
         <ReceiptModalDB
           open={!!receiptRecord}
@@ -210,19 +322,63 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
         />
       )}
 
-      {/* Payment Date Modal */}
+      {/* ─── Modal de Pagamento ──────────────────────────────────────────────── */}
       <Dialog open={!!paymentModal} onOpenChange={() => setPaymentModal(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-primary" />
-              Data de Pagamento
+              Registrar Pagamento
             </DialogTitle>
           </DialogHeader>
-          <div className="py-2 space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Informe a data em que o pagamento foi recebido.
-            </p>
+          <div className="py-2 space-y-4">
+            {paymentModal && (
+              <p className="text-xs text-muted-foreground">
+                Contrato: <strong>{formatCurrency(paymentModal.record.rent_value)}</strong>
+              </p>
+            )}
+
+            {/* Valor pago */}
+            <div>
+              <Label>Valor Pago (R$)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                className="mt-1"
+                value={paymentModal?.paidAmount ?? ''}
+                onChange={e => setPaymentModal(prev => prev ? { ...prev, paidAmount: e.target.value } : null)}
+              />
+              {paymentModal && parseFloat(paymentModal.paidAmount) < paymentModal.record.rent_value && parseFloat(paymentModal.paidAmount) > 0 && (
+                <p className="text-xs mt-1 flex items-center gap-1" style={{ color: 'hsl(var(--overdue))' }}>
+                  <AlertTriangle className="w-3 h-3" />
+                  Ficará devendo {formatCurrency(paymentModal.record.rent_value - parseFloat(paymentModal.paidAmount))}
+                </p>
+              )}
+            </div>
+
+            {/* Forma de pagamento */}
+            <div>
+              <Label>Forma de Pagamento</Label>
+              <div className="flex gap-2 mt-1">
+                {(['pix', 'especie'] as PaymentMethod[]).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setPaymentModal(prev => prev ? { ...prev, method: m } : null)}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm transition-colors ${
+                      paymentModal?.method === m
+                        ? 'border-primary bg-primary/10 text-primary font-medium'
+                        : 'border-border hover:bg-muted'
+                    }`}
+                  >
+                    {m === 'pix' ? <Banknote className="w-4 h-4" /> : <Wallet className="w-4 h-4" />}
+                    {m === 'pix' ? 'Pix' : 'Espécie'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Data do pagamento */}
             <div>
               <Label>Data do Pagamento</Label>
               <Input
@@ -230,17 +386,82 @@ export default function FinancialTabDB({ apartmentId, tenantId, tenantName, tena
                 className="mt-1"
                 value={paymentModal?.date ?? ''}
                 onChange={e => setPaymentModal(prev => prev ? { ...prev, date: e.target.value } : null)}
-                autoFocus
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPaymentModal(null)}>Cancelar</Button>
             <Button onClick={confirmPayment} disabled={upsert.isPending}>
-              {upsert.isPending
-                ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                : <CheckCircle className="w-4 h-4 mr-2" />}
-              Confirmar Pagamento
+              {upsert.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Modal de Saldo Devedor ──────────────────────────────────────────── */}
+      <Dialog open={!!debtModal} onOpenChange={() => setDebtModal(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" style={{ color: 'hsl(var(--overdue))' }} />
+              Registrar Pagamento de Saldo
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-4">
+            {debtModal && (
+              <p className="text-xs text-muted-foreground">
+                Saldo devedor original: <strong style={{ color: 'hsl(var(--overdue))' }}>{formatCurrency(calcOwed(debtModal.record))}</strong>
+              </p>
+            )}
+
+            <div>
+              <Label>Valor Pago (R$)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                className="mt-1"
+                value={debtModal?.amount ?? ''}
+                onChange={e => setDebtModal(prev => prev ? { ...prev, amount: e.target.value } : null)}
+              />
+            </div>
+
+            <div>
+              <Label>Forma de Pagamento</Label>
+              <div className="flex gap-2 mt-1">
+                {(['pix', 'especie'] as PaymentMethod[]).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setDebtModal(prev => prev ? { ...prev, method: m } : null)}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm transition-colors ${
+                      debtModal?.method === m
+                        ? 'border-primary bg-primary/10 text-primary font-medium'
+                        : 'border-border hover:bg-muted'
+                    }`}
+                  >
+                    {m === 'pix' ? <Banknote className="w-4 h-4" /> : <Wallet className="w-4 h-4" />}
+                    {m === 'pix' ? 'Pix' : 'Espécie'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label>Data do Pagamento</Label>
+              <Input
+                type="date"
+                className="mt-1"
+                value={debtModal?.date ?? ''}
+                onChange={e => setDebtModal(prev => prev ? { ...prev, date: e.target.value } : null)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDebtModal(null)}>Cancelar</Button>
+            <Button onClick={confirmDebtPayment} disabled={upsert.isPending}>
+              {upsert.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+              Registrar
             </Button>
           </DialogFooter>
         </DialogContent>
