@@ -13,12 +13,13 @@ import {
   ChevronDown,
   ChevronUp,
   FileText,
+  Building2,
 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-
-const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutos em ms
-
+ 
+const INACTIVITY_TIMEOUT = 15 * 60 * 1000;
+ 
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
   {
@@ -33,7 +34,7 @@ const navItems = [
   },
   { label: 'Recibos', icon: FileText, path: '/recibos' },
 ];
-
+ 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, signOut } = useAuth();
   const location = useLocation();
@@ -44,8 +45,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     location.pathname.startsWith('/financeiro')
   );
   const inactivityTimer = useRef<number | null>(null);
-
-  // -- Auto-logout por inatividade ------------------------------------------
+ 
   const resetTimer = useCallback(() => {
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     inactivityTimer.current = setTimeout(async () => {
@@ -53,7 +53,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       navigate('/login');
     }, INACTIVITY_TIMEOUT);
   }, [signOut, navigate]);
-
+ 
   useEffect(() => {
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
     events.forEach(e => window.addEventListener(e, resetTimer, { passive: true }));
@@ -63,13 +63,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     };
   }, [resetTimer]);
-
-  // Fecha menu mobile ao navegar
+ 
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
-
-  // Sidebar colapsa em mobile
+ 
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 768) setSidebarOpen(false);
@@ -79,53 +77,68 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
+ 
   async function handleLogout() {
     await signOut();
     navigate('/login');
   }
-
+ 
   const userName =
     user?.user_metadata?.username || user?.email?.split('@')[0] || 'Usuário';
   const userEmail = user?.email || '';
-
+  const userInitial = userName.charAt(0).toUpperCase();
+ 
   function SidebarContent({ mobile = false }: { mobile?: boolean }) {
+    const expanded = mobile || sidebarOpen;
+ 
     return (
-      <>
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
-          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary shrink-0">
-            <Home className="w-5 h-5 text-primary-foreground" />
+      <div className="flex flex-col h-full">
+        {/* Logo Header */}
+        <div
+          className="flex items-center gap-3 px-4 py-4 shrink-0"
+          style={{ borderBottom: '1px solid hsl(var(--sidebar-border))' }}
+        >
+          <div
+            className="sidebar-logo-gradient flex items-center justify-center w-8 h-8 rounded-lg shrink-0"
+            style={{ boxShadow: '0 2px 8px hsl(217 91% 55% / 0.35)' }}
+          >
+            <Building2 className="w-4 h-4 text-white" />
           </div>
           <div
             className="overflow-hidden transition-all duration-300"
             style={{
-              width: mobile || sidebarOpen ? 'auto' : 0,
-              opacity: mobile || sidebarOpen ? 1 : 0,
+              width: expanded ? 'auto' : 0,
+              opacity: expanded ? 1 : 0,
+              whiteSpace: 'nowrap',
             }}
           >
-            <p className="text-sm font-bold text-sidebar-accent-foreground leading-tight whitespace-nowrap">
+            <p
+              className="text-sm font-bold leading-tight"
+              style={{ color: 'hsl(218 22% 92%)' }}
+            >
               Living Gest
             </p>
-            <p
-              className="text-xs whitespace-nowrap"
-              style={{ color: 'hsl(var(--sidebar-foreground))' }}
-            >
+            <p className="text-xs" style={{ color: 'hsl(var(--sidebar-foreground))' }}>
               Gestão de Imóveis
             </p>
           </div>
           {mobile && (
             <button
               onClick={() => setMobileMenuOpen(false)}
-              className="ml-auto p-1 rounded-md hover:bg-muted transition-colors"
+              className="ml-auto p-1.5 rounded-md transition-colors"
+              style={{ color: 'hsl(var(--sidebar-foreground))' }}
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
-
+ 
         {/* Nav */}
-        <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+          {expanded && (
+            <p className="sidebar-section-label">Menu</p>
+          )}
+ 
           {navItems.map(item => {
             const isActive = location.pathname.startsWith(item.path);
             if (item.children) {
@@ -140,42 +153,42 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         setFinanceiroOpen(o => !o);
                       }
                     }}
-                    className={`sidebar-nav-item w-full text-left ${isActive ? 'active' : ''}`}
+                    className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
                   >
-                    <item.icon className="w-5 h-5 shrink-0" />
-                    {(mobile || sidebarOpen) && (
+                    <item.icon className="w-4 h-4 shrink-0" />
+                    {expanded && (
                       <>
-                        <span className="flex-1">{item.label}</span>
+                        <span className="flex-1 text-left">{item.label}</span>
                         {financeiroOpen ? (
-                          <ChevronUp className="w-4 h-4 ml-auto opacity-60" />
+                          <ChevronUp className="w-3.5 h-3.5 opacity-50" />
                         ) : (
-                          <ChevronDown className="w-4 h-4 ml-auto opacity-60" />
+                          <ChevronDown className="w-3.5 h-3.5 opacity-50" />
                         )}
                       </>
                     )}
                   </button>
                   <div
-                    className="overflow-hidden transition-all duration-300 ease-in-out"
+                    className="overflow-hidden transition-all duration-250 ease-in-out"
                     style={{
-                      maxHeight:
-                        (mobile || sidebarOpen) && financeiroOpen ? '200px' : '0px',
+                      maxHeight: expanded && financeiroOpen ? '200px' : '0px',
                     }}
                   >
-                    <div className="ml-3 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
+                    <div
+                      className="ml-3 mt-0.5 mb-1 space-y-0.5 pl-3"
+                      style={{ borderLeft: '1px solid hsl(var(--sidebar-border))' }}
+                    >
                       {item.children.map(child => {
                         const childActive = location.pathname === child.path;
                         return (
                           <Link
                             key={child.path}
                             to={child.path}
-                            className={`sidebar-nav-item py-1.5 text-sm ${
-                              childActive ? 'active' : ''
-                            }`}
+                            className={`sidebar-nav-item py-1.5 text-xs ${childActive ? 'active' : ''}`}
                           >
-                            <child.icon className="w-4 h-4 shrink-0" />
+                            <child.icon className="w-3.5 h-3.5 shrink-0" />
                             <span>{child.label}</span>
                             {childActive && (
-                              <ChevronRight className="w-3 h-3 ml-auto" />
+                              <ChevronRight className="w-3 h-3 ml-auto opacity-60" />
                             )}
                           </Link>
                         );
@@ -185,95 +198,114 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </div>
               );
             }
-
+ 
             return (
               <Link
                 key={item.path}
                 to={item.path}
                 className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
               >
-                <item.icon className="w-5 h-5 shrink-0" />
-                {(mobile || sidebarOpen) && <span>{item.label}</span>}
-                {(mobile || sidebarOpen) && isActive && (
-                  <ChevronRight className="w-4 h-4 ml-auto" />
+                <item.icon className="w-4 h-4 shrink-0" />
+                {expanded && <span>{item.label}</span>}
+                {expanded && isActive && (
+                  <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-60" />
                 )}
               </Link>
             );
           })}
         </nav>
-
-        {/* User + Logout */}
-        <div className="px-2 py-3 border-t border-sidebar-border space-y-1">
+ 
+        {/* Footer: User + Logout */}
+        <div
+          className="px-2 py-3 space-y-0.5 shrink-0"
+          style={{ borderTop: '1px solid hsl(var(--sidebar-border))' }}
+        >
+          {expanded && (
+            <p className="sidebar-section-label">Conta</p>
+          )}
           <Link
             to="/profile"
-            className={`sidebar-nav-item ${
-              location.pathname === '/profile' ? 'active' : ''
-            }`}
+            className={`sidebar-nav-item ${location.pathname === '/profile' ? 'active' : ''}`}
           >
-            <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
-              <User className="w-3 h-3 text-primary-foreground" />
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold text-white"
+              style={{ background: 'linear-gradient(135deg, hsl(217 91% 55%), hsl(238 83% 62%))' }}
+            >
+              {userInitial}
             </div>
-            {(mobile || sidebarOpen) && (
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-sidebar-accent-foreground truncate">
+            {expanded && (
+              <div className="min-w-0 flex-1">
+                <p
+                  className="text-xs font-semibold truncate leading-tight"
+                  style={{ color: 'hsl(218 22% 88%)' }}
+                >
                   {userName}
                 </p>
                 <p
-                  className="text-xs truncate"
+                  className="text-xs truncate leading-tight"
                   style={{ color: 'hsl(var(--sidebar-foreground))' }}
                 >
                   {userEmail}
                 </p>
               </div>
             )}
+            {expanded && <User className="w-3.5 h-3.5 opacity-40 shrink-0" />}
           </Link>
           <button
             onClick={handleLogout}
-            className="sidebar-nav-item w-full text-left"
-            style={{ color: 'hsl(var(--overdue))' }}
+            className="sidebar-nav-item"
+            style={{ color: 'hsl(0 72% 65%)' }}
           >
-            <LogOut className="w-5 h-5 shrink-0" />
-            {(mobile || sidebarOpen) && <span>Sair</span>}
+            <LogOut className="w-4 h-4 shrink-0" />
+            {expanded && <span>Sair</span>}
           </button>
         </div>
-      </>
+      </div>
     );
   }
-
+ 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* -- DESKTOP SIDEBAR -- */}
+      {/* DESKTOP SIDEBAR */}
       <aside
-        className="hidden md:flex flex-col shrink-0 transition-all duration-300 ease-in-out"
+        className="hidden md:flex flex-col shrink-0 transition-all duration-300 ease-in-out relative"
         style={{
-          width: sidebarOpen ? '240px' : '68px',
+          width: sidebarOpen ? '228px' : '60px',
           background: 'hsl(var(--sidebar-background))',
+          boxShadow: 'inset -1px 0 0 hsl(var(--sidebar-border))',
         }}
       >
         <SidebarContent />
-      </aside>
-
-      {/* Toggle button desktop */}
-      <div className="hidden md:block relative">
+ 
+        {/* Collapse toggle */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="absolute top-4 -left-3 z-10 w-6 h-6 rounded-full border border-border bg-card shadow-sm flex items-center justify-center hover:bg-muted transition-colors"
+          className="absolute -right-3 top-5 z-10 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200"
+          style={{
+            background: 'hsl(var(--card))',
+            border: '1px solid hsl(var(--border))',
+            boxShadow: '0 1px 4px rgb(0 0 0 / 0.12)',
+            color: 'hsl(var(--muted-foreground))',
+          }}
         >
-          {sidebarOpen ? <X className="w-3 h-3" /> : <Menu className="w-3 h-3" />}
+          {sidebarOpen ? (
+            <ChevronRight className="w-3 h-3 rotate-180" />
+          ) : (
+            <ChevronRight className="w-3 h-3" />
+          )}
         </button>
-      </div>
-
-      {/* -- MOBILE OVERLAY DRAWER -- */}
+      </aside>
+ 
+      {/* MOBILE OVERLAY */}
       <div
-        className={`fixed inset-0 z-40 bg-black/50 md:hidden transition-opacity duration-300 ${
-          mobileMenuOpen
-            ? 'opacity-100 pointer-events-auto'
-            : 'opacity-0 pointer-events-none'
+        className={`fixed inset-0 z-40 md:hidden transition-opacity duration-300 ${
+          mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
+        style={{ background: 'rgb(0 0 0 / 0.6)' }}
         onClick={() => setMobileMenuOpen(false)}
       />
       <aside
-        className="fixed inset-y-0 left-0 z-50 flex flex-col w-72 md:hidden shadow-xl transition-transform duration-300 ease-in-out"
+        className="fixed inset-y-0 left-0 z-50 flex flex-col w-72 md:hidden shadow-2xl transition-transform duration-300 ease-in-out"
         style={{
           background: 'hsl(var(--sidebar-background))',
           transform: mobileMenuOpen ? 'translateX(0)' : 'translateX(-100%)',
@@ -281,26 +313,45 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       >
         <SidebarContent mobile />
       </aside>
-
+ 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Mobile top bar */}
-        <header className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-card shrink-0">
+        <header
+          className="md:hidden flex items-center gap-3 px-4 py-3 border-b shrink-0"
+          style={{
+            background: 'hsl(var(--sidebar-background))',
+            borderColor: 'hsl(var(--sidebar-border))',
+          }}
+        >
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="p-2 rounded-lg hover:bg-muted transition-colors"
+            className="p-2 rounded-lg transition-colors"
+            style={{ color: 'hsl(var(--sidebar-foreground))' }}
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
-              <Home className="w-4 h-4 text-primary-foreground" />
+          <div className="flex items-center gap-2.5">
+            <div
+              className="sidebar-logo-gradient w-7 h-7 rounded-lg flex items-center justify-center"
+              style={{ boxShadow: '0 2px 8px hsl(217 91% 55% / 0.3)' }}
+            >
+              <Building2 className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="font-bold text-sm">Living Gest</span>
+            <span
+              className="font-bold text-sm"
+              style={{ color: 'hsl(218 22% 92%)' }}
+            >
+              Living Gest
+            </span>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
+ 
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+          {children}
+        </main>
       </div>
     </div>
   );
 }
+ 
