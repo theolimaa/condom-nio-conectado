@@ -36,7 +36,7 @@ import {
 import { useTenants } from '@/hooks/useTenants';
 import { useAllFinancialRecords } from '@/hooks/useFinancial';
 import { useContracts } from '@/hooks/useContracts';
-
+ 
 function ApartmentModal({
   open,
   onClose,
@@ -51,7 +51,7 @@ function ApartmentModal({
   const addApt = useAddApartment();
   const updateApt = useUpdateApartment();
   const [unitNumber, setUnitNumber] = useState(initial?.unit_number ?? '');
-
+ 
   async function handleSave() {
     if (!unitNumber) return;
     if (initial) {
@@ -61,7 +61,7 @@ function ApartmentModal({
     }
     onClose();
   }
-
+ 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
@@ -94,7 +94,7 @@ function ApartmentModal({
     </Dialog>
   );
 }
-
+ 
 function ApartmentCard({
   apt,
   condominiumId,
@@ -123,7 +123,7 @@ function ApartmentCard({
   const { data: tenants = [] } = useTenants(apt.id);
   const { data: contracts = [] } = useContracts();
   const currentTenant = tenants[0];
-
+ 
   // ✅ CORREÇÃO: receita usa payment_date; inadimplência usa month
   const received = allFinancialRecords
     .filter(r => {
@@ -132,7 +132,7 @@ function ApartmentCard({
       return y === selectedYear && (selectedMonth === null || m - 1 === selectedMonth);
     })
     .reduce((s, r) => s + r.rent_value, 0);
-
+ 
   const overdue = allFinancialRecords.some(r => {
     if (r.apartment_id !== apt.id || r.paid) return false;
     const [y, m] = r.month.split('-').map(Number);
@@ -141,7 +141,7 @@ function ApartmentCard({
     const contract = contracts.find(c => c.id === r.contract_id);
     return getRecordStatus(r.month, contract?.payment_day) === 'overdue';
   });
-
+ 
   return (
     <>
       <div
@@ -208,14 +208,14 @@ function ApartmentCard({
           )}
         </div>
       </div>
-
+ 
       <ApartmentModal
         open={editApt}
         onClose={() => setEditApt(false)}
         condominiumId={condominiumId}
         initial={apt}
       />
-
+ 
       <AlertDialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -240,20 +240,20 @@ function ApartmentCard({
     </>
   );
 }
-
+ 
 export default function CondominiumDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { state } = useApp();
   const [showAdd, setShowAdd] = useState(false);
-
+ 
   const { data: condominiums = [] } = useCondominiums();
   const { data: apartments = [], isLoading } = useApartments(id);
   const { data: allFinancialRecords = [] } = useAllFinancialRecords();
-
+ 
   const cond = condominiums.find(c => c.id === id);
   const { selectedYear, selectedMonth } = state;
-
+ 
   // ✅ CORREÇÃO: receita = registros PAGOS com payment_date no mês/ano selecionado
   const condApts = apartments.filter(a => a.condominium_id === id);
   const totalReceived = allFinancialRecords
@@ -266,7 +266,7 @@ export default function CondominiumDetail() {
       );
     })
     .reduce((s, r) => s + r.rent_value, 0);
-
+ 
   if (!cond && !isLoading)
     return (
       <Layout>
@@ -282,28 +282,31 @@ export default function CondominiumDetail() {
         </div>
       </Layout>
     );
-
+ 
   return (
     <Layout>
-      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+      <div className="page-content">
         {/* Header */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => navigate('/dashboard')}
-                className="p-2 rounded-lg hover:bg-muted transition-colors"
+                className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <h1 className="text-xl md:text-2xl font-bold">
-                {cond?.name ?? 'Carregando...'}
-              </h1>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">
+                  {cond?.name ?? 'Carregando...'}
+                </h1>
+                <p className="text-sm text-muted-foreground mt-0.5">Gestão de apartamentos</p>
+              </div>
             </div>
             <div className="hidden sm:flex items-center gap-2">
               <GlobalFilter />
-              <Button onClick={() => setShowAdd(true)}>
-                <Plus className="w-4 h-4 mr-2" />
+              <Button onClick={() => setShowAdd(true)} className="btn-primary-glow gap-1.5">
+                <Plus className="w-4 h-4" />
                 Novo Apartamento
               </Button>
             </div>
@@ -312,45 +315,49 @@ export default function CondominiumDetail() {
             <div className="flex-1">
               <GlobalFilter />
             </div>
-            <Button onClick={() => setShowAdd(true)} size="sm" className="shrink-0">
-              <Plus className="w-4 h-4 mr-1" />
+            <Button onClick={() => setShowAdd(true)} size="sm" className="shrink-0 gap-1">
+              <Plus className="w-4 h-4" />
               Apto
             </Button>
           </div>
         </div>
-
+ 
         {/* Summary */}
-        <div className="grid grid-cols-3 gap-2 md:gap-4">
-          <div className="stat-card">
-            <p className="text-sm text-muted-foreground mb-1">Total de Aptos</p>
-            <p className="text-xl md:text-2xl font-bold">{apartments.length}</p>
+        <div className="grid grid-cols-3 gap-3 stagger-children">
+          <div className="stat-card stat-card-primary">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 relative z-10">Total de Aptos</p>
+            <p className="text-2xl font-bold relative z-10">{apartments.length}</p>
           </div>
-          <div className="stat-card">
-            <p className="text-sm text-muted-foreground mb-1">Receita</p>
+          <div className="stat-card stat-card-paid">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 relative z-10">Receita</p>
             <p
-              className="text-lg md:text-2xl font-bold truncate"
+              className="text-lg md:text-2xl font-bold truncate relative z-10"
               style={{ color: 'hsl(var(--paid))' }}
             >
               {formatCurrency(totalReceived)}
             </p>
           </div>
           <div className="stat-card">
-            <p className="text-sm text-muted-foreground mb-1">Ano</p>
-            <p className="text-xl md:text-2xl font-bold">{selectedYear}</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 relative z-10">Ano</p>
+            <p className="text-2xl font-bold relative z-10">{selectedYear}</p>
           </div>
         </div>
-
+ 
         {/* Apartments grid */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <div className="flex items-center justify-center py-16">
+            <div
+              className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin"
+              style={{ borderColor: 'hsl(var(--primary) / 0.3)', borderTopColor: 'hsl(var(--primary))' }}
+            />
           </div>
         ) : apartments.length === 0 ? (
-          <div className="bg-card border border-dashed border-border rounded-xl p-12 text-center">
-            <Home className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
-            <p className="text-muted-foreground">Nenhum apartamento cadastrado</p>
-            <Button className="mt-4" onClick={() => setShowAdd(true)}>
-              <Plus className="w-4 h-4 mr-2" /> Adicionar
+          <div className="empty-state">
+            <Home className="empty-state-icon" />
+            <p className="font-medium text-muted-foreground mb-1">Nenhum apartamento cadastrado</p>
+            <p className="text-sm text-muted-foreground mb-4">Adicione o primeiro apartamento deste condomínio</p>
+            <Button className="btn-primary-glow gap-1.5 mt-2" onClick={() => setShowAdd(true)}>
+              <Plus className="w-4 h-4" /> Adicionar Apartamento
             </Button>
           </div>
         ) : (
@@ -368,7 +375,7 @@ export default function CondominiumDetail() {
           </div>
         )}
       </div>
-
+ 
       <ApartmentModal
         open={showAdd}
         onClose={() => setShowAdd(false)}
@@ -377,3 +384,4 @@ export default function CondominiumDetail() {
     </Layout>
   );
 }
+ 
