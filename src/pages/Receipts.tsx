@@ -39,12 +39,12 @@ import {
   SavedReceipt,
 } from '@/hooks/useReceipts';
 import { useCondominiums } from '@/hooks/useCondominiums';
-
+ 
 function formatMonth(month: string) {
   const [y, m] = month.split('-').map(Number);
   return `${MONTHS[m - 1]} ${y}`;
 }
-
+ 
 function ReceiptItem({
   receipt,
   onDelete,
@@ -53,7 +53,7 @@ function ReceiptItem({
   onDelete: (r: SavedReceipt) => void;
 }) {
   const [loading, setLoading] = useState(false);
-
+ 
   async function handleDownload() {
     setLoading(true);
     try {
@@ -75,7 +75,7 @@ function ReceiptItem({
       setLoading(false);
     }
   }
-
+ 
   const savedDate = new Date(receipt.saved_at).toLocaleDateString('pt-BR', {
     day: '2-digit',
     month: '2-digit',
@@ -83,7 +83,7 @@ function ReceiptItem({
     hour: '2-digit',
     minute: '2-digit',
   });
-
+ 
   return (
     <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 rounded-lg transition-colors group">
       <FileText className="w-5 h-5 text-primary shrink-0" />
@@ -122,7 +122,7 @@ function ReceiptItem({
     </div>
   );
 }
-
+ 
 function FolderSection({
   label,
   receipts,
@@ -160,14 +160,14 @@ function FolderSection({
     </div>
   );
 }
-
+ 
 export default function Receipts() {
   const { data: receipts = [], isLoading } = useSavedReceipts();
   const { data: condominiums = [] } = useCondominiums();
   const deleteReceipt = useDeleteSavedReceipt();
   const bulkSave = useBulkSaveReceipts();
   const cleanupOld = useCleanupOldReceipts();
-
+ 
   const [filterYear, setFilterYear] = useState<string>('all');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [filterCondo, setFilterCondo] = useState<string>('all');
@@ -175,7 +175,7 @@ export default function Receipts() {
   const [toDelete, setToDelete] = useState<SavedReceipt | null>(null);
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [confirmCleanup, setConfirmCleanup] = useState(false);
-
+ 
   // Filtrar recibos
   const filtered = useMemo(() => {
     return receipts.filter(r => {
@@ -197,7 +197,7 @@ export default function Receipts() {
       return true;
     });
   }, [receipts, filterYear, filterMonth, filterCondo, search]);
-
+ 
   // Agrupar por condomínio → mês
   const grouped = useMemo(() => {
     const byCondoMonth: Record<
@@ -221,29 +221,29 @@ export default function Receipts() {
       return b.month.localeCompare(a.month);
     });
   }, [filtered]);
-
+ 
   // Lista de condomínios únicos nos recibos salvos
   const condoOptions = useMemo(() => {
     const names = [...new Set(receipts.map(r => r.condominium_name))].sort();
     return names;
   }, [receipts]);
-
+ 
   return (
     <Layout>
-      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+      <div className="page-content">
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2.5">
               <FileText className="w-6 h-6 text-primary" />
               Recibos
             </h1>
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-sm mt-0.5">
               Backup de todos os recibos gerados. Clique em "Salvar" no
               financeiro de cada apartamento para arquivar aqui.
             </p>
           </div>
-
+ 
           {/* Botão salvar todos */}
           <div className="flex gap-2 shrink-0">
             <Button
@@ -274,7 +274,7 @@ export default function Receipts() {
             </Button>
           </div>
         </div>
-
+ 
         {/* Filtros */}
         <div className="flex flex-wrap gap-2">
           <div className="relative">
@@ -326,7 +326,7 @@ export default function Receipts() {
             </SelectContent>
           </Select>
         </div>
-
+ 
         {/* Contagem */}
         {!isLoading && (
           <p className="text-sm text-muted-foreground">
@@ -334,15 +334,15 @@ export default function Receipts() {
             encontrado{filtered.length !== 1 ? 's' : ''}
           </p>
         )}
-
+ 
         {/* Conteúdo */}
         {isLoading ? (
           <div className="flex justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="bg-card border border-dashed border-border rounded-xl p-16 text-center">
-            <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground/40" />
+          <div className="empty-state">
+            <FileText className="empty-state-icon" />
             <p className="font-medium text-muted-foreground mb-1">
               Nenhum recibo encontrado
             </p>
@@ -364,7 +364,7 @@ export default function Receipts() {
           </div>
         )}
       </div>
-
+ 
       {/* Confirm bulk save */}
       <AlertDialog open={confirmBulk} onOpenChange={setConfirmBulk}>
         <AlertDialogContent>
@@ -390,7 +390,7 @@ export default function Receipts() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
+ 
       {/* Confirm cleanup old receipts */}
       <AlertDialog open={confirmCleanup} onOpenChange={setConfirmCleanup}>
         <AlertDialogContent>
@@ -415,7 +415,7 @@ export default function Receipts() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
+ 
       {/* Confirm delete */}
       <AlertDialog
         open={!!toDelete}
@@ -453,3 +453,4 @@ export default function Receipts() {
     </Layout>
   );
 }
+ 
