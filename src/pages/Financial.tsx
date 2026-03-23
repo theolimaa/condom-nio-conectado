@@ -22,9 +22,9 @@ import {
 } from '@/hooks/useFinancial';
 import { useContracts } from '@/hooks/useContracts';
 import ReceiptModalDB from '@/components/apartment/ReceiptModalDB';
-
+ 
 type PaymentMethod = 'pix' | 'especie';
-
+ 
 function computeStatus(
   record: FinancialRecordDB,
   paymentDay?: number | null,
@@ -33,7 +33,7 @@ function computeStatus(
   if (record.paid) return 'paid';
   return getRecordStatus(record.month, paymentDay, contractStartDate);
 }
-
+ 
 function getDueDate(
   month: string,
   contractStartDate: string | null | undefined,
@@ -42,10 +42,10 @@ function getDueDate(
   const { dueDateStr } = getPeriodAndDueDate(month, contractStartDate ?? null, paymentDay ?? 1);
   return dueDateStr;
 }
-
+ 
 type SortField = 'condo' | 'apt' | 'tenant' | 'period' | 'status' | 'payment_date';
 type SortDir = 'asc' | 'desc';
-
+ 
 export default function Financial() {
   const { data: condominiums = [] } = useCondominiums();
   const { data: apartments = [] } = useApartments();
@@ -53,7 +53,7 @@ export default function Financial() {
   const { data: financialRecords = [], isLoading } = useAllFinancialRecords();
   const { data: contracts = [] } = useContracts();
   const upsert = useUpsertFinancialRecord();
-
+ 
   const [filterYear, setFilterYear] = useState('2026');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [filterCondo, setFilterCondo] = useState<string>('all');
@@ -61,7 +61,7 @@ export default function Financial() {
   const [receiptRecord, setReceiptRecord] = useState<FinancialRecordDB | null>(null);
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
-
+ 
   // Modal de pagamento
   const [paymentModal, setPaymentModal] = useState<{
     record: FinancialRecordDB;
@@ -69,12 +69,12 @@ export default function Financial() {
     paidAmount: string;
     method: PaymentMethod;
   } | null>(null);
-
+ 
   function toggleSort(field: SortField) {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDir('asc'); }
   }
-
+ 
   const enriched = financialRecords.map(r => {
     const apt = apartments.find(a => a.id === r.apartment_id);
     const condo = apt ? condominiums.find(c => c.id === apt.condominium_id) : null;
@@ -84,22 +84,22 @@ export default function Financial() {
     const dueDate = getDueDate(r.month, contract?.start_date, contract?.payment_day);
     return { ...r, apt, condo, tenant, contract, computedStatus: status, dueDate };
   });
-
+ 
   let filtered = enriched.filter(r => {
     if (r.month < '2026-01') return false;
     if (filterCondo !== 'all' && r.condo?.id !== filterCondo) return false;
-
+ 
     let dateForFilter: string;
     if (r.paid && r.payment_date) {
       dateForFilter = r.payment_date;
     } else {
       dateForFilter = r.dueDate;
     }
-
+ 
     const [y, m] = dateForFilter.split('-').map(Number);
     if (y !== Number(filterYear)) return false;
     if (filterMonth !== 'all' && m - 1 !== Number(filterMonth)) return false;
-
+ 
     if (filterStatus !== 'all') {
       if (filterStatus === 'paid' && r.computedStatus !== 'paid') return false;
       if (filterStatus === 'pending' && r.computedStatus !== 'pending') return false;
@@ -107,7 +107,7 @@ export default function Financial() {
     }
     return true;
   });
-
+ 
   if (sortField) {
     filtered = [...filtered].sort((a, b) => {
       let cmp = 0;
@@ -128,7 +128,7 @@ export default function Financial() {
   } else {
     filtered.sort((a, b) => a.month.localeCompare(b.month));
   }
-
+ 
   // Totais usando calcReceived (valor real recebido)
   const totalReceived = filtered
     .filter(r => r.computedStatus === 'paid')
@@ -142,7 +142,7 @@ export default function Financial() {
   const totalOwed = filtered
     .filter(r => r.paid)
     .reduce((s, r) => s + calcOwed(r), 0);
-
+ 
   function openPaymentModal(record: FinancialRecordDB) {
     setPaymentModal({
       record,
@@ -151,7 +151,7 @@ export default function Financial() {
       method: 'pix',
     });
   }
-
+ 
   async function confirmPayment() {
     if (!paymentModal) return;
     const paidAmt = parseFloat(paymentModal.paidAmount) || 0;
@@ -165,7 +165,7 @@ export default function Financial() {
     });
     setPaymentModal(null);
   }
-
+ 
   async function unmarkPaid(record: FinancialRecordDB) {
     await upsert.mutateAsync({
       ...record,
@@ -179,12 +179,12 @@ export default function Financial() {
       status: 'Pendente',
     });
   }
-
+ 
   const receiptApt = receiptRecord ? apartments.find(a => a.id === receiptRecord.apartment_id) : null;
   const receiptTenant = receiptRecord ? allTenants.find(t => t.id === receiptRecord.tenant_id) : null;
   const receiptContract = receiptRecord ? contracts.find(c => c.id === receiptRecord.contract_id) : null;
   const receiptCondo = receiptApt ? condominiums.find(c => c.id === receiptApt.condominium_id) : null;
-
+ 
   function SortHeader({ field, children }: { field: SortField; children: React.ReactNode }) {
     return (
       <button className="inline-flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => toggleSort(field)}>
@@ -193,64 +193,64 @@ export default function Financial() {
       </button>
     );
   }
-
+ 
   return (
     <Layout>
-      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+      <div className="page-content">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold">Financeiro</h1>
-          <p className="text-muted-foreground text-sm">Painel de controle de recebimentos</p>
+          <h1 className="text-2xl font-bold tracking-tight">Financeiro</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">Painel de controle de recebimentos</p>
         </div>
-
+ 
         {/* Cards de resumo */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="stat-card">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-muted-foreground">Recebido</p>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--paid)/0.12)' }}>
-                <TrendingUp className="w-4 h-4" style={{ color: 'hsl(var(--paid))' }} />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 stagger-children">
+          <div className="stat-card stat-card-paid">
+            <div className="flex items-center justify-between mb-3 relative z-10">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recebido</p>
+              <div className="icon-badge icon-badge-success">
+                <TrendingUp className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(totalReceived)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Valor efetivamente recebido</p>
+            <p className="text-xl md:text-2xl font-bold relative z-10" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(totalReceived)}</p>
+            <p className="text-xs text-muted-foreground mt-1.5 relative z-10">Valor efetivamente recebido</p>
           </div>
-
-          <div className="stat-card">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-muted-foreground">A Receber</p>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--warning)/0.12)' }}>
-                <DollarSign className="w-4 h-4" style={{ color: 'hsl(var(--warning))' }} />
+ 
+          <div className="stat-card stat-card-warning">
+            <div className="flex items-center justify-between mb-3 relative z-10">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">A Receber</p>
+              <div className="icon-badge icon-badge-warning">
+                <DollarSign className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--warning))' }}>{formatCurrency(totalToReceive)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Vencimento não chegou</p>
+            <p className="text-xl md:text-2xl font-bold relative z-10" style={{ color: 'hsl(var(--warning))' }}>{formatCurrency(totalToReceive)}</p>
+            <p className="text-xs text-muted-foreground mt-1.5 relative z-10">Vencimento não chegou</p>
           </div>
-
-          <div className="stat-card">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-muted-foreground">Inadimplente</p>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--overdue)/0.12)' }}>
-                <TrendingDown className="w-4 h-4" style={{ color: 'hsl(var(--overdue))' }} />
+ 
+          <div className="stat-card stat-card-danger">
+            <div className="flex items-center justify-between mb-3 relative z-10">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Inadimplente</p>
+              <div className="icon-badge icon-badge-danger">
+                <TrendingDown className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--overdue))' }}>{formatCurrency(totalOverdue)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Venceu e não pagou</p>
+            <p className="text-xl md:text-2xl font-bold relative z-10" style={{ color: 'hsl(var(--overdue))' }}>{formatCurrency(totalOverdue)}</p>
+            <p className="text-xs text-muted-foreground mt-1.5 relative z-10">Venceu e não pagou</p>
           </div>
-
-          <div className="stat-card">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-muted-foreground">Devendo</p>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--overdue)/0.12)' }}>
-                <AlertTriangle className="w-4 h-4" style={{ color: 'hsl(var(--overdue))' }} />
+ 
+          <div className="stat-card stat-card-danger">
+            <div className="flex items-center justify-between mb-3 relative z-10">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Devendo</p>
+              <div className="icon-badge icon-badge-danger">
+                <AlertTriangle className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold" style={{ color: totalOwed > 0 ? 'hsl(var(--overdue))' : 'hsl(var(--paid))' }}>
+            <p className="text-xl md:text-2xl font-bold relative z-10" style={{ color: totalOwed > 0 ? 'hsl(var(--overdue))' : 'hsl(var(--paid))' }}>
               {formatCurrency(totalOwed)}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Saldo devedor dos pagos</p>
+            <p className="text-xs text-muted-foreground mt-1.5 relative z-10">Saldo devedor dos pagos</p>
           </div>
         </div>
-
+ 
         {/* Filtros */}
         <div className="flex flex-wrap gap-2">
           <Select value={filterYear} onValueChange={setFilterYear}>
@@ -281,31 +281,33 @@ export default function Financial() {
             </SelectContent>
           </Select>
         </div>
-
+ 
         {/* Tabela */}
         {isLoading ? (
-          <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          </div>
         ) : filtered.length === 0 ? (
-          <div className="bg-card border border-dashed border-border rounded-xl p-12 text-center">
+          <div className="empty-state">
             <p className="text-muted-foreground">Nenhum registro encontrado para os filtros selecionados.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-border bg-card">
+          <div className="overflow-x-auto rounded-xl border border-border bg-card" style={{ boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)' }}>
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-muted/50 border-b border-border">
-                  <th className="text-left px-3 py-3 font-medium text-muted-foreground hidden md:table-cell"><SortHeader field="condo">Condomínio</SortHeader></th>
-                  <th className="text-left px-3 py-3 font-medium text-muted-foreground"><SortHeader field="apt">Apto</SortHeader></th>
-                  <th className="text-left px-3 py-3 font-medium text-muted-foreground hidden sm:table-cell"><SortHeader field="tenant">Inquilino</SortHeader></th>
-                  <th className="text-left px-3 py-3 font-medium text-muted-foreground hidden lg:table-cell"><SortHeader field="period">Período Ref.</SortHeader></th>
-                  <th className="text-center px-3 py-3 font-medium text-muted-foreground hidden lg:table-cell">Vencimento</th>
-                  <th className="text-right px-3 py-3 font-medium text-muted-foreground">Valor</th>
-                  <th className="text-right px-3 py-3 font-medium text-muted-foreground hidden sm:table-cell">Pago</th>
-                  <th className="text-center px-3 py-3 font-medium text-muted-foreground hidden xl:table-cell">Forma</th>
-                  <th className="text-center px-3 py-3 font-medium text-muted-foreground"><SortHeader field="status">Status</SortHeader></th>
-                  <th className="text-center px-3 py-3 font-medium text-muted-foreground hidden md:table-cell"><SortHeader field="payment_date">Data Pag.</SortHeader></th>
-                  <th className="text-right px-3 py-3 font-medium hidden sm:table-cell" style={{ color: 'hsl(var(--overdue))' }}>Devendo</th>
-                  <th className="text-center px-3 py-3 font-medium text-muted-foreground">Ações</th>
+                <tr className="bg-muted/40 border-b border-border">
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden md:table-cell"><SortHeader field="condo">Condomínio</SortHeader></th>
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide"><SortHeader field="apt">Apto</SortHeader></th>
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden sm:table-cell"><SortHeader field="tenant">Inquilino</SortHeader></th>
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden lg:table-cell"><SortHeader field="period">Período Ref.</SortHeader></th>
+                  <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden lg:table-cell">Vencimento</th>
+                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Valor</th>
+                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden sm:table-cell">Pago</th>
+                  <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden xl:table-cell">Forma</th>
+                  <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide"><SortHeader field="status">Status</SortHeader></th>
+                  <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden md:table-cell"><SortHeader field="payment_date">Data Pag.</SortHeader></th>
+                  <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide hidden sm:table-cell" style={{ color: 'hsl(var(--overdue))' }}>Devendo</th>
+                  <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -374,7 +376,7 @@ export default function Financial() {
           </div>
         )}
       </div>
-
+ 
       {/* Modal de Recibo */}
       {receiptRecord && receiptApt && receiptTenant && (
         <ReceiptModalDB
@@ -388,7 +390,7 @@ export default function Financial() {
           condominiumName={receiptCondo?.name ?? ''}
         />
       )}
-
+ 
       {/* ─── Modal de Pagamento ──────────────────────────────────────────────────── */}
       <Dialog open={!!paymentModal} onOpenChange={() => setPaymentModal(null)}>
         <DialogContent className="max-w-sm">
@@ -404,7 +406,7 @@ export default function Financial() {
                 {paymentModal.record.apt?.unit_number ?? ''} · Contrato: <strong>{formatCurrency(paymentModal.record.rent_value)}</strong>
               </p>
             )}
-
+ 
             {/* Valor pago */}
             <div>
               <Label>Valor Pago (R$)</Label>
@@ -421,7 +423,7 @@ export default function Financial() {
                 </p>
               )}
             </div>
-
+ 
             {/* Forma de pagamento */}
             <div>
               <Label>Forma de Pagamento</Label>
@@ -441,7 +443,7 @@ export default function Financial() {
                 ))}
               </div>
             </div>
-
+ 
             {/* Data */}
             <div>
               <Label>Data do Pagamento</Label>
@@ -463,3 +465,4 @@ export default function Financial() {
     </Layout>
   );
 }
+ 
