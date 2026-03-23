@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, Home, TrendingUp, TrendingDown, DollarSign, Pencil, Trash2, ArrowUpDown, AlertTriangle } from 'lucide-react';
+import { Plus, Building2, Home, TrendingUp, TrendingDown, DollarSign, Pencil, Trash2, ArrowUpDown, AlertTriangle, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -17,7 +17,7 @@ import { useAllFinancialRecords, FinancialRecordDB, calcReceived, calcOwed } fro
 import { useContracts } from '@/hooks/useContracts';
 import { useTenants } from '@/hooks/useTenants';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
-
+ 
 function getStatus(
   record: FinancialRecordDB,
   paymentDay?: number | null,
@@ -28,18 +28,16 @@ function getStatus(
   if (record.paid) return 'paid';
   return getRecordStatus(record.month, paymentDay, contractStartDate, desiredPaymentDay, desiredPaymentDate);
 }
-
-// Extrai o mês (YYYY-MM) da data de vencimento de um registro
+ 
 function getDueDateMonth(record: FinancialRecordDB, contract?: { start_date?: string | null; payment_day?: number | null; desired_payment_day?: number | null; desired_payment_date?: string | null } | null): string | null {
   if (!contract) return null;
   const { dueDateLabel } = getPeriodAndDueDate(record.month, contract.start_date ?? null, contract.payment_day ?? 1, contract.desired_payment_day, contract.desired_payment_date);
-  // dueDateLabel formato: "DD/MM/YYYY"
   if (!dueDateLabel || dueDateLabel === '-') return null;
   const parts = dueDateLabel.split('/');
   if (parts.length !== 3) return null;
-  return `${parts[2]}-${parts[1]}`; // YYYY-MM
+  return `${parts[2]}-${parts[1]}`;
 }
-
+ 
 function CondominiumModal({ open, onClose, initial }: { open: boolean; onClose: () => void; initial?: CondominiumDB }) {
   const addCond = useAddCondominium();
   const updateCond = useUpdateCondominium();
@@ -70,10 +68,10 @@ function CondominiumModal({ open, onClose, initial }: { open: boolean; onClose: 
     </Dialog>
   );
 }
-
+ 
 type ModalSortField = 'condo' | 'apt' | 'date';
 type ModalSortDir = 'asc' | 'desc';
-
+ 
 function DetailModal({ open, onClose, title, records, tenants, apartments, condominiums, variant }: {
   open: boolean; onClose: () => void; title: string;
   records: (FinancialRecordDB & { computedStatus: string })[]; tenants: { id: string; first_name: string; last_name: string }[];
@@ -83,22 +81,21 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
   const [sortField, setSortField] = useState<ModalSortField | null>(null);
   const [sortDir, setSortDir] = useState<ModalSortDir>('asc');
   const { data: contracts = [] } = useContracts();
-
+ 
   function toggleSort(field: ModalSortField) {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDir('asc'); }
   }
-
-  // Converte DD/MM/YYYY para YYYY-MM-DD para ordenação correta
+ 
   function parseDateForSort(dateStr: string): string {
     if (!dateStr || dateStr === '-') return '';
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
       const [d, m, y] = dateStr.split('/');
       return `${y}-${m}-${d}`;
     }
-    return dateStr; // já em YYYY-MM-DD
+    return dateStr;
   }
-
+ 
   const enriched = records.map(r => {
     const apt = apartments.find(a => a.id === r.apartment_id);
     const condo = apt ? condominiums.find(c => c.id === apt.condominium_id) : null;
@@ -112,7 +109,7 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
     }
     return { ...r, apt, condo, dateCol };
   });
-
+ 
   const sorted = sortField ? [...enriched].sort((a, b) => {
     let cmp = 0;
     if (sortField === 'condo') cmp = (a.condo?.name ?? '').localeCompare(b.condo?.name ?? '');
@@ -120,9 +117,9 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
     else if (sortField === 'date') cmp = parseDateForSort(a.dateCol).localeCompare(parseDateForSort(b.dateCol));
     return sortDir === 'asc' ? cmp : -cmp;
   }) : enriched;
-
+ 
   const lastColLabel = variant === 'received' || variant === 'debt' ? 'Data Pagamento' : 'Vencimento';
-
+ 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
@@ -134,19 +131,19 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border">
-                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">
+                  <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs uppercase tracking-wide">
                     <button className="inline-flex items-center gap-1" onClick={() => toggleSort('condo')}>
                       Condomínio <ArrowUpDown className={`w-3 h-3 ${sortField === 'condo' ? 'text-primary' : 'text-muted-foreground/50'}`} />
                     </button>
                   </th>
-                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">
+                  <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs uppercase tracking-wide">
                     <button className="inline-flex items-center gap-1" onClick={() => toggleSort('apt')}>
                       Apto <ArrowUpDown className={`w-3 h-3 ${sortField === 'apt' ? 'text-primary' : 'text-muted-foreground/50'}`} />
                     </button>
                   </th>
-                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Inquilino</th>
-                  <th className="text-right px-3 py-2 font-medium text-muted-foreground">Valor</th>
-                  <th className="text-center px-3 py-2 font-medium text-muted-foreground">
+                  <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs uppercase tracking-wide">Inquilino</th>
+                  <th className="text-right px-3 py-2.5 font-medium text-muted-foreground text-xs uppercase tracking-wide">Valor</th>
+                  <th className="text-center px-3 py-2.5 font-medium text-muted-foreground text-xs uppercase tracking-wide">
                     <button className="inline-flex items-center gap-1" onClick={() => toggleSort('date')}>
                       {lastColLabel} <ArrowUpDown className={`w-3 h-3 ${sortField === 'date' ? 'text-primary' : 'text-muted-foreground/50'}`} />
                     </button>
@@ -157,12 +154,12 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
                 {sorted.map(r => {
                   const t = tenants.find(t => t.id === r.tenant_id);
                   return (
-                    <tr key={r.id} className="border-b border-border last:border-0">
-                      <td className="px-3 py-2">{r.condo?.name ?? '-'}</td>
-                      <td className="px-3 py-2">{r.apt?.unit_number ?? '-'}</td>
-                      <td className="px-3 py-2">{t ? `${t.first_name} ${t.last_name}` : '-'}</td>
-                      <td className="px-3 py-2 text-right font-semibold">{formatCurrency(variant === 'received' ? calcReceived(r) : variant === 'debt' ? calcOwed(r) : r.rent_value)}</td>
-                      <td className="px-3 py-2 text-center text-xs">{r.dateCol}</td>
+                    <tr key={r.id} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
+                      <td className="px-3 py-2.5 text-sm">{r.condo?.name ?? '-'}</td>
+                      <td className="px-3 py-2.5 text-sm font-medium">{r.apt?.unit_number ?? '-'}</td>
+                      <td className="px-3 py-2.5 text-sm">{t ? `${t.first_name} ${t.last_name}` : '-'}</td>
+                      <td className="px-3 py-2.5 text-right font-semibold text-sm">{formatCurrency(variant === 'received' ? calcReceived(r) : variant === 'debt' ? calcOwed(r) : r.rent_value)}</td>
+                      <td className="px-3 py-2.5 text-center text-xs text-muted-foreground">{r.dateCol}</td>
                     </tr>
                   );
                 })}
@@ -174,7 +171,7 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
     </Dialog>
   );
 }
-
+ 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { state } = useApp();
@@ -185,77 +182,66 @@ export default function Dashboard() {
   const [overdueModal, setOverdueModal] = useState(false);
   const [receivedModal, setReceivedModal] = useState(false);
   const [debtModal, setDebtModal] = useState(false);
-
+ 
   const { data: condominiums = [], isLoading: loadingConds } = useCondominiums();
   const { data: apartments = [] } = useApartments();
   const { data: financialRecords = [] } = useAllFinancialRecords();
   const { data: contracts = [] } = useContracts();
   const { data: allTenants = [] } = useTenants();
   const deleteCondo = useDeleteCondominium();
-
+ 
   const { selectedYear, selectedMonth } = state;
-
   const [chartYear, setChartYear] = useState(String(selectedYear));
   const [chartCondo, setChartCondo] = useState<string>('all');
-
-  // Filtro de mês selecionado no formato YYYY-MM
+ 
   const selectedMonthKey = selectedMonth !== null
     ? `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`
     : null;
-
-  // Mapa apartment_id → contrato ativo (do inquilino atual, sem archived_at)
-  // Resolve o caso de registros com contract_id=null ou tenant_id=null
+ 
   const contractByApartment = new Map<string, typeof contracts[0]>();
   for (const tenant of allTenants) {
     if (!tenant.apartment_id) continue;
     const c = contracts.find(ct => ct.tenant_id === tenant.id);
     if (c) contractByApartment.set(tenant.apartment_id, c);
   }
-
-  // Enriquecer registros e descartar os anteriores ao contrato atual
+ 
   const enrichedRecords = financialRecords.flatMap(r => {
     const contract =
       (r.contract_id ? contracts.find(c => c.id === r.contract_id) : undefined) ??
       contractByApartment.get(r.apartment_id);
-
-    // Descarta meses anteriores ao início do contrato atual do apartamento
+ 
     if (contract?.start_date) {
       if (r.month < contract.start_date.substring(0, 7)) return [];
     }
-
+ 
     const status = getStatus(r, contract?.payment_day, contract?.start_date, contract?.desired_payment_day, contract?.desired_payment_date);
     const dueDateMonth = getDueDateMonth(r, contract);
     const paymentMonth = r.payment_date ? r.payment_date.substring(0, 7) : null;
     return [{ ...r, computedStatus: status, dueDateMonth, paymentMonth }];
   });
-
-  // Receita Recebida: filtrar pelo mês em que o pagamento foi feito (payment_date)
+ 
   const receivedRecords = enrichedRecords.filter(r => {
     if (!r.paid || !r.paymentMonth) return false;
     if (selectedMonthKey) return r.paymentMonth === selectedMonthKey;
     return r.paymentMonth.startsWith(String(selectedYear));
   });
-
-  // A Receber: filtrar pelo mês de vencimento
+ 
   const pendingRecords = enrichedRecords.filter(r => {
     if (r.computedStatus !== 'pending') return false;
     if (selectedMonthKey) return r.dueDateMonth === selectedMonthKey;
     return r.dueDateMonth?.startsWith(String(selectedYear)) ?? false;
   });
-
-  // Inadimplente: filtrar pelo mês de vencimento
+ 
   const overdueRecords = enrichedRecords.filter(r => {
     if (r.computedStatus !== 'overdue') return false;
     if (selectedMonthKey) return r.dueDateMonth === selectedMonthKey;
     return r.dueDateMonth?.startsWith(String(selectedYear)) ?? false;
   });
-
+ 
   const totalReceived = receivedRecords.reduce((s, r) => s + calcReceived(r), 0);
   const totalPending = pendingRecords.reduce((s, r) => s + r.rent_value, 0);
   const totalOverdue = overdueRecords.reduce((s, r) => s + r.rent_value, 0);
-
-  // Devendo: registros pagos parcialmente (paid=true mas paid_amount < rent_value)
-  // Filtra pelo mês do pagamento, igual ao Recebido
+ 
   const debtRecords = enrichedRecords.filter(r => {
     if (!r.paid || !r.paymentMonth) return false;
     const owed = calcOwed(r);
@@ -264,199 +250,350 @@ export default function Dashboard() {
     return r.paymentMonth.startsWith(String(selectedYear));
   });
   const totalOwed = debtRecords.reduce((s, r) => s + calcOwed(r), 0);
-
-  // Gráfico mensal
+ 
   const chartData = MONTHS.map((month, idx) => {
     const monthKey = `${chartYear}-${String(idx + 1).padStart(2, '0')}`;
     const matchCondo = (r: typeof enrichedRecords[0]) =>
       chartCondo === 'all' || apartments.find(a => a.id === r.apartment_id)?.condominium_id === chartCondo;
-
+ 
     const rec = enrichedRecords.filter(r => r.paid && r.paymentMonth === monthKey && matchCondo(r)).reduce((s, r) => s + calcReceived(r), 0);
     const pend = enrichedRecords.filter(r => r.computedStatus === 'pending' && r.dueDateMonth === monthKey && matchCondo(r)).reduce((s, r) => s + r.rent_value, 0);
     const over = enrichedRecords.filter(r => r.computedStatus === 'overdue' && r.dueDateMonth === monthKey && matchCondo(r)).reduce((s, r) => s + r.rent_value, 0);
     return { month: month.substring(0, 3), receita: rec, aReceber: pend, inadimplente: over };
   });
-
+ 
   const filterLabel = selectedMonth !== null ? MONTHS[selectedMonth] : 'Ano';
-
+ 
+  // Count occupied apts
+  const occupiedCount = apartments.filter(a => allTenants.some(t => t.apartment_id === a.id)).length;
+ 
   return (
     <Layout>
-      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
-        {/* Header */}
+      <div className="page-content">
+        {/* ── Header ─────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-xl md:text-2xl font-bold">Dashboard</h1>
-              <p className="text-muted-foreground text-sm">Visão geral financeira e de imóveis</p>
+              <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+              <p className="text-muted-foreground text-sm mt-0.5">
+                Visão geral — {filterLabel} {selectedYear}
+              </p>
             </div>
-            <div className="hidden sm:flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2 shrink-0">
               <GlobalFilter />
-              <Button onClick={() => setShowAdd(true)}>
-                <Plus className="w-4 h-4 mr-2" /> Adicionar Condomínio
+              <Button onClick={() => setShowAdd(true)} className="btn-primary-glow gap-1.5">
+                <Plus className="w-4 h-4" /> Novo Condomínio
               </Button>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:hidden">
             <div className="flex-1"><GlobalFilter /></div>
-            <Button onClick={() => setShowAdd(true)} size="sm" className="shrink-0">
-              <Plus className="w-4 h-4 mr-1" /> Cond.
+            <Button onClick={() => setShowAdd(true)} size="sm" className="shrink-0 gap-1">
+              <Plus className="w-4 h-4" /> Cond.
             </Button>
           </div>
         </div>
-
-        {/* Stat cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4">
-          <div className="stat-card cursor-pointer hover:shadow-md transition-shadow" onClick={() => setReceivedModal(true)}>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-muted-foreground">Receita Recebida</p>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--paid)/0.12)' }}>
-                <TrendingUp className="w-4 h-4" style={{ color: 'hsl(var(--paid))' }} />
+ 
+        {/* ── KPI Cards ──────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 stagger-children">
+          {/* Receita Recebida */}
+          <div
+            className="stat-card stat-card-paid cursor-pointer"
+            onClick={() => setReceivedModal(true)}
+          >
+            <div className="flex items-center justify-between mb-3 relative z-10">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recebido</p>
+              <div className="icon-badge icon-badge-success">
+                <TrendingUp className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(totalReceived)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes · {filterLabel} {selectedYear}</p>
+            <p className="text-xl md:text-2xl font-bold relative z-10" style={{ color: 'hsl(var(--paid))' }}>
+              {formatCurrency(totalReceived)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1.5 relative z-10 flex items-center gap-1">
+              Ver detalhes <ChevronRight className="w-3 h-3" />
+            </p>
           </div>
-
-          <div className="stat-card cursor-pointer hover:shadow-md transition-shadow" onClick={() => setPendingModal(true)}>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-muted-foreground">A Receber</p>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--warning)/0.12)' }}>
-                <DollarSign className="w-4 h-4" style={{ color: 'hsl(var(--warning))' }} />
+ 
+          {/* A Receber */}
+          <div
+            className="stat-card stat-card-warning cursor-pointer"
+            onClick={() => setPendingModal(true)}
+          >
+            <div className="flex items-center justify-between mb-3 relative z-10">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">A Receber</p>
+              <div className="icon-badge icon-badge-warning">
+                <DollarSign className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--warning))' }}>{formatCurrency(totalPending)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes · {filterLabel} {selectedYear}</p>
+            <p className="text-xl md:text-2xl font-bold relative z-10" style={{ color: 'hsl(var(--warning))' }}>
+              {formatCurrency(totalPending)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1.5 relative z-10 flex items-center gap-1">
+              Ver detalhes <ChevronRight className="w-3 h-3" />
+            </p>
           </div>
-
-          <div className="stat-card cursor-pointer hover:shadow-md transition-shadow" onClick={() => setOverdueModal(true)}>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-muted-foreground">Inadimplente</p>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--overdue)/0.12)' }}>
-                <TrendingDown className="w-4 h-4" style={{ color: 'hsl(var(--overdue))' }} />
+ 
+          {/* Inadimplente */}
+          <div
+            className="stat-card stat-card-danger cursor-pointer"
+            onClick={() => setOverdueModal(true)}
+          >
+            <div className="flex items-center justify-between mb-3 relative z-10">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Inadimplente</p>
+              <div className="icon-badge icon-badge-danger">
+                <TrendingDown className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold" style={{ color: 'hsl(var(--overdue))' }}>{formatCurrency(totalOverdue)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes · {filterLabel} {selectedYear}</p>
+            <p className="text-xl md:text-2xl font-bold relative z-10" style={{ color: 'hsl(var(--overdue))' }}>
+              {formatCurrency(totalOverdue)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1.5 relative z-10 flex items-center gap-1">
+              Ver detalhes <ChevronRight className="w-3 h-3" />
+            </p>
           </div>
-
-          <div className="stat-card cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDebtModal(true)}>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-muted-foreground">Devendo</p>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--overdue)/0.12)' }}>
-                <AlertTriangle className="w-4 h-4" style={{ color: 'hsl(var(--overdue))' }} />
+ 
+          {/* Devendo */}
+          <div
+            className="stat-card stat-card-danger cursor-pointer"
+            onClick={() => setDebtModal(true)}
+          >
+            <div className="flex items-center justify-between mb-3 relative z-10">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Devendo</p>
+              <div className="icon-badge icon-badge-danger">
+                <AlertTriangle className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold" style={{ color: totalOwed > 0 ? 'hsl(var(--overdue))' : 'hsl(var(--paid))' }}>{formatCurrency(totalOwed)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Clique para detalhes · {filterLabel} {selectedYear}</p>
+            <p
+              className="text-xl md:text-2xl font-bold relative z-10"
+              style={{ color: totalOwed > 0 ? 'hsl(var(--overdue))' : 'hsl(var(--paid))' }}
+            >
+              {formatCurrency(totalOwed)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1.5 relative z-10 flex items-center gap-1">
+              Ver detalhes <ChevronRight className="w-3 h-3" />
+            </p>
           </div>
-
-          <div className="stat-card">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-muted-foreground">Apartamentos</p>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary/10">
-                <Home className="w-4 h-4 text-primary" />
+ 
+          {/* Apartamentos */}
+          <div className="stat-card stat-card-primary">
+            <div className="flex items-center justify-between mb-3 relative z-10">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unidades</p>
+              <div className="icon-badge icon-badge-primary">
+                <Home className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-xl md:text-2xl font-bold">{apartments.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">em {condominiums.length} condomínio(s)</p>
+            <p className="text-xl md:text-2xl font-bold relative z-10">{apartments.length}</p>
+            <p className="text-xs text-muted-foreground mt-1.5 relative z-10">
+              {occupiedCount} ocupadas · {apartments.length - occupiedCount} vagas
+            </p>
           </div>
         </div>
-
-        {/* Grouped Bar Chart */}
-        <div className="bg-card rounded-xl border border-border p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold">Receita Mensal - {chartYear}</h2>
+ 
+        {/* ── Chart ──────────────────────────────────────────────────── */}
+        <div className="chart-container">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="section-title">Receita Mensal</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Recebido vs A Receber vs Inadimplente</p>
+            </div>
             <div className="flex items-center gap-2">
               <Select value={chartCondo} onValueChange={setChartCondo}>
-                <SelectTrigger className="w-40 h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-40 h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  {condominiums.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  {condominiums.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select value={chartYear} onValueChange={setChartYear}>
-                <SelectTrigger className="w-20 h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-20 h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                  {YEARS.map(y => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={chartData} barGap={2} barCategoryGap="20%">
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-              <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-              <RechartsTooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
-              <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="receita" name="Receita" fill="hsl(142, 71%, 45%)" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="aReceber" name="A Receber" fill="hsl(38, 92%, 50%)" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="inadimplente" name="Inadimplente" fill="hsl(0, 84%, 60%)" radius={[3, 3, 0, 0]} />
+            <BarChart data={chartData} barGap={2} barCategoryGap="22%">
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis
+                dataKey="month"
+                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+              />
+              <RechartsTooltip
+                formatter={(value: number) => formatCurrency(value)}
+                contentStyle={{
+                  background: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  boxShadow: '0 4px 16px rgb(0 0 0 / 0.12)',
+                }}
+                cursor={{ fill: 'hsl(var(--muted) / 0.5)' }}
+              />
+              <Legend
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: 12, paddingTop: 12 }}
+              />
+              <Bar dataKey="receita" name="Recebido" fill="hsl(142 72% 42%)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="aReceber" name="A Receber" fill="hsl(37 95% 48%)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="inadimplente" name="Inadimplente" fill="hsl(0 84% 58%)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-
-        {/* Condominiums grid */}
+ 
+        {/* ── Condominiums Grid ──────────────────────────────────────── */}
         <div>
-          <h2 className="text-base font-semibold mb-3">Condomínios</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="section-title">Condomínios</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {condominiums.length} condomínio{condominiums.length !== 1 ? 's' : ''} cadastrado{condominiums.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+          </div>
+ 
           {loadingConds ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <div className="flex items-center justify-center py-16">
+              <div
+                className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin"
+                style={{ borderColor: 'hsl(var(--primary) / 0.3)', borderTopColor: 'hsl(var(--primary))' }}
+              />
             </div>
           ) : condominiums.length === 0 ? (
-            <div className="bg-card border border-dashed border-border rounded-xl p-12 text-center">
-              <Building2 className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
-              <p className="text-muted-foreground">Nenhum condomínio cadastrado</p>
-              <Button className="mt-4" onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-2" /> Adicionar</Button>
+            <div className="empty-state">
+              <Building2 className="empty-state-icon" />
+              <p className="font-medium text-muted-foreground mb-1">Nenhum condomínio cadastrado</p>
+              <p className="text-sm text-muted-foreground mb-4">Comece adicionando seu primeiro condomínio</p>
+              <Button onClick={() => setShowAdd(true)} className="btn-primary-glow gap-1.5">
+                <Plus className="w-4 h-4" /> Adicionar Condomínio
+              </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
               {condominiums.map(cond => {
                 const condApts = apartments.filter(a => a.condominium_id === cond.id);
+                const condOccupied = condApts.filter(a => allTenants.some(t => t.apartment_id === a.id)).length;
                 const condReceived = receivedRecords
                   .filter(r => condApts.some(a => a.id === r.apartment_id))
                   .reduce((s, r) => s + calcReceived(r), 0);
+                const condOverdue = overdueRecords
+                  .filter(r => condApts.some(a => a.id === r.apartment_id))
+                  .reduce((s, r) => s + r.rent_value, 0);
+                const occupancyPct = condApts.length > 0 ? Math.round((condOccupied / condApts.length) * 100) : 0;
+ 
                 return (
-                  // CARD INTEIRO clicável
                   <div
                     key={cond.id}
-                    className="bg-card rounded-xl border border-border overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                    className="condo-card"
                     onClick={() => navigate(`/condominiums/${cond.id}`)}
                   >
+                    {/* Card top accent bar */}
+                    <div
+                      className="h-1 w-full"
+                      style={{ background: 'linear-gradient(90deg, hsl(217 91% 50%), hsl(238 83% 62%))' }}
+                    />
                     <div className="p-5">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                          <Building2 className="w-5 h-5 text-primary" />
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                            style={{
+                              background: 'linear-gradient(135deg, hsl(217 91% 50% / 0.12), hsl(238 83% 62% / 0.08))',
+                              border: '1px solid hsl(217 91% 50% / 0.15)',
+                            }}
+                          >
+                            <Building2 className="w-5 h-5 text-primary" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-sm leading-tight">{cond.name}</h3>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {condApts.length} apt{condApts.length !== 1 ? 's' : ''} · {occupancyPct}% ocupado
+                            </p>
+                          </div>
                         </div>
                         <div className="flex gap-1">
                           <button
                             onClick={e => { e.stopPropagation(); setEditCond(cond); }}
-                            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            className="p-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={e => { e.stopPropagation(); setDeleteCond(cond); }}
-                            className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                            className="p-1.5 rounded-md transition-colors text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
-                      <h3 className="font-semibold text-base">{cond.name}</h3>
-                      <div className="flex items-center justify-between mt-4">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Apartamentos</p>
-                          <p className="font-semibold">{condApts.length}</p>
+ 
+                      {/* Occupancy bar */}
+                      <div className="mb-4">
+                        <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+                          <span>Ocupação</span>
+                          <span className="font-medium">{condOccupied}/{condApts.length}</span>
                         </div>
-                        <div className="text-right">
-                          <p className="text-xs text-muted-foreground">Receita</p>
-                          <p className="font-semibold" style={{ color: 'hsl(var(--paid))' }}>{formatCurrency(condReceived)}</p>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${occupancyPct}%`,
+                              background: occupancyPct > 0 ? 'linear-gradient(90deg, hsl(142 72% 42%), hsl(142 72% 50%))' : 'hsl(var(--muted-foreground))',
+                            }}
+                          />
+                        </div>
+                      </div>
+ 
+                      {/* Financial row */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div
+                          className="rounded-lg p-2.5"
+                          style={{ background: 'hsl(var(--muted) / 0.5)' }}
+                        >
+                          <p className="text-xs text-muted-foreground mb-0.5">Recebido</p>
+                          <p className="text-sm font-bold" style={{ color: 'hsl(var(--paid))' }}>
+                            {formatCurrency(condReceived)}
+                          </p>
+                        </div>
+                        <div
+                          className="rounded-lg p-2.5"
+                          style={{ background: condOverdue > 0 ? 'hsl(var(--overdue) / 0.06)' : 'hsl(var(--muted) / 0.5)' }}
+                        >
+                          <p className="text-xs text-muted-foreground mb-0.5">Inadimpl.</p>
+                          <p
+                            className="text-sm font-bold"
+                            style={{ color: condOverdue > 0 ? 'hsl(var(--overdue))' : 'hsl(var(--muted-foreground))' }}
+                          >
+                            {condOverdue > 0 ? formatCurrency(condOverdue) : '—'}
+                          </p>
                         </div>
                       </div>
                     </div>
-                    <div className="border-t border-border px-5 py-3">
-                      <span className="text-sm text-primary font-medium">Ver apartamentos &rsaquo;</span>
+ 
+                    <div
+                      className="border-t px-5 py-3 flex items-center justify-between"
+                      style={{ borderColor: 'hsl(var(--border))' }}
+                    >
+                      <span className="text-xs text-muted-foreground">Ver apartamentos</span>
+                      <ChevronRight className="w-4 h-4 text-primary" />
                     </div>
                   </div>
                 );
@@ -465,7 +602,8 @@ export default function Dashboard() {
           )}
         </div>
       </div>
-
+ 
+      {/* Modals */}
       <DetailModal
         open={debtModal}
         onClose={() => setDebtModal(false)}
@@ -476,10 +614,10 @@ export default function Dashboard() {
         condominiums={condominiums}
         variant="debt"
       />
-
+ 
       <CondominiumModal open={showAdd} onClose={() => setShowAdd(false)} />
       {editCond && <CondominiumModal open={!!editCond} onClose={() => setEditCond(null)} initial={editCond} />}
-
+ 
       <AlertDialog open={!!deleteCond} onOpenChange={() => setDeleteCond(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -490,16 +628,20 @@ export default function Dashboard() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={async () => { await deleteCondo.mutateAsync(deleteCond!.id); setDeleteCond(null); }} className="bg-destructive hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={async () => { await deleteCondo.mutateAsync(deleteCond!.id); setDeleteCond(null); }}
+              className="bg-destructive hover:bg-destructive/90"
+            >
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <DetailModal open={pendingModal} onClose={() => setPendingModal(false)} title={`A Receber - ${filterLabel} ${selectedYear}`} records={pendingRecords} tenants={allTenants} apartments={apartments} condominiums={condominiums} variant="pending" />
-      <DetailModal open={overdueModal} onClose={() => setOverdueModal(false)} title={`Inadimplentes - ${filterLabel} ${selectedYear}`} records={overdueRecords} tenants={allTenants} apartments={apartments} condominiums={condominiums} variant="overdue" />
-      <DetailModal open={receivedModal} onClose={() => setReceivedModal(false)} title={`Receita Recebida - ${filterLabel} ${selectedYear}`} records={receivedRecords} tenants={allTenants} apartments={apartments} condominiums={condominiums} variant="received" />
+ 
+      <DetailModal open={pendingModal} onClose={() => setPendingModal(false)} title={`A Receber — ${filterLabel} ${selectedYear}`} records={pendingRecords} tenants={allTenants} apartments={apartments} condominiums={condominiums} variant="pending" />
+      <DetailModal open={overdueModal} onClose={() => setOverdueModal(false)} title={`Inadimplentes — ${filterLabel} ${selectedYear}`} records={overdueRecords} tenants={allTenants} apartments={apartments} condominiums={condominiums} variant="overdue" />
+      <DetailModal open={receivedModal} onClose={() => setReceivedModal(false)} title={`Receita Recebida — ${filterLabel} ${selectedYear}`} records={receivedRecords} tenants={allTenants} apartments={apartments} condominiums={condominiums} variant="received" />
     </Layout>
   );
 }
+ 
