@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { AlertTriangle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle, XCircle, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useContract, useUpsertContract, useCloseContract, useUndoCloseContract, ContractDB } from '@/hooks/useContracts';
-import { useBulkGeneratePeriods } from '@/hooks/useFinancial';
+import { useBulkGeneratePeriods, useFinancialRecords } from '@/hooks/useFinancial';
 import { formatCurrency, formatDate, MONTHS } from '@/lib/utils-app';
 import { toast } from 'sonner';
 
@@ -43,6 +43,7 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [form, setForm] = useState<Partial<ContractDB>>({});
 
+  const [generatingPeriods, setGeneratingPeriods] = useState(false);
   const [showPaymentDayModal, setShowPaymentDayModal] = useState(false);
   const [newPaymentDay, setNewPaymentDay] = useState<number | null>(null);
   const [paymentDayFromMonth, setPaymentDayFromMonth] = useState<string>('');
@@ -119,6 +120,23 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
     setEditing(false);
   }
 
+  async function handleManualGenerate() {
+    if (!contract) return;
+    setGeneratingPeriods(true);
+    try {
+      await bulkGenerate.mutateAsync({
+        apartmentId,
+        tenantId,
+        contractId: contract.id,
+        startDate: contract.start_date,
+        rentValue: contract.rent_value,
+        paymentDay: contract.payment_day ?? 1,
+      });
+    } finally {
+      setGeneratingPeriods(false);
+    }
+  }
+
   async function handlePaymentDayConfirm() {
     if (!pendingSaveRef.current || !newPaymentDay || !paymentDayFromMonth) return;
     const formData = { ...pendingSaveRef.current };
@@ -134,8 +152,10 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
     const result = await closeContract.mutateAsync({ contractId: contract.id, tenantId, apartmentId, endDate });
     setShowClose(false);
     lastCloseRef.current = {
-      contractId: result.contractId, tenantId: result.tenantId,
-      prevTenantId: result.prevTenantId, apartmentId: result.apartmentId,
+      contractId: result.contractId ?? contract.id,
+      tenantId: result.tenantId ?? tenantId,
+      prevTenantId: result.prevTenantId ?? '',
+      apartmentId: result.apartmentId ?? apartmentId,
     };
     toast.success(`Contrato de ${tenantName} encerrado.`, {
       duration: 60000,
@@ -292,7 +312,7 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold">Detalhes do Contrato</h3>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {contract?.status === 'active' && (
             <>
               <Button size="sm" variant="outline" onClick={startEdit}>Editar</Button>
@@ -301,6 +321,18 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
               </Button>
             </>
           )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleManualGenerate}
+            disabled={generatingPeriods || bulkGenerate.isPending}
+            title="Gera os períodos financeiros caso não tenham sido criados automaticamente"
+          >
+            {generatingPeriods || bulkGenerate.isPending
+              ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              : <RefreshCw className="w-4 h-4 mr-2" />}
+            Gerar Períodos
+          </Button>
         </div>
       </div>
 
