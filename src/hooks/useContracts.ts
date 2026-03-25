@@ -14,6 +14,10 @@ export interface ContractDB {
   rent_value: number;
   observations: string | null;
   status: string | null;
+  // Campos de caução
+  caution_paid: boolean | null;
+  caution_value: number | null;
+  caution_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -65,7 +69,7 @@ export function useUpsertContract() {
           .select()
           .single();
         if (error) throw error;
-        return data;
+        return data as ContractDB;
       } else {
         const { id: _id, ...insertData } = contract as ContractDB;
         const { data, error } = await supabase
@@ -74,7 +78,7 @@ export function useUpsertContract() {
           .select()
           .single();
         if (error) throw error;
-        return data;
+        return data as ContractDB;
       }
     },
     onSuccess: (data) => {
@@ -184,5 +188,66 @@ export function useCloseContract() {
       toast.success('Contrato encerrado! Inquilino movido para histórico.');
     },
     onError: (e: Error) => toast.error(`Erro ao encerrar contrato: ${e.message}`),
+  });
+}
+
+/**
+ * Desfaz o encerramento de contrato:
+ * 1. Restaura o contrato para status 'active', remove end_date
+ * 2. Remove o registro de previous_tenants
+ * 3. Restaura o inquilino (remove archived_at)
+ */
+export function useUndoCloseContract() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      contractId,
+      tenantId,
+      prevTenantId,
+      apartmentId,
+    }: {
+      contractId: string;
+      tenantId: string;
+      prevTenantId: string;
+      apartmentId: string;
+    }) => {
+      // 1. Restaurar contrato
+      const { error: contractErr } = await supabase
+        .from('contracts')
+        .update({ status: 'active', end_date: null })
+        .eq('id', contractId);
+      if (contractErr) throw contractErr;
+
+      // 2. Remover de previous_tenants
+      const { error: prevErr } = await supabase
+        .from('previous_tenants')
+        .delete()
+        .eq('id', prevTenantId);
+      if (prevErr) throw prevErr;
+
+      // 3. Restaurar inquilino (remove archived_at)
+      const { error: tenantErr } = await supabase
+        .from('tenants')
+        .update({ archived_at: null })
+        .eq('id', tenantId);
+      if (tenantErr) throw tenantErr;
+
+      return { apartmentId, tenantId, contractId };
+    },
+
+    onSuccess: ({ apartmentId, tenantId }) => {
+      qc.invalidateQueries({ queryKey: ['tenants', apartmentId] });
+      qc.invalidateQueries({ queryKey: ['tenants'] });
+      qc.invalidateQueries({ queryKey: ['contract', tenantId] });
+      qc.invalidateQueries({ queryKey: ['contracts_all'] });
+      qc.invalidateQueries({ queryKey: ['previous_tenants', apartmentId] });
+      qc.invalidateQueries({ queryKey: ['previous_tenants'] });
+      qc.invalidateQueries({ queryKey: ['financial_records', apartmentId] });
+      qc.invalidateQueries({ queryKey: ['apartments', apartmentId] });
+      qc.invalidateQueries({ queryKey: ['apartments'] });
+      toast.success('Encerramento desfeito! Contrato reativado.');
+    },
+    onError: (e: Error) => toast.error(`Erro ao desfazer encerramento: ${e.message}`),
   });
 }
