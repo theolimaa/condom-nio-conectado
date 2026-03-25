@@ -88,33 +88,48 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
       ? (contract?.payment_day ?? formData.payment_day ?? null)
       : (formData.payment_day ?? null);
 
-    const result = await upsertContract.mutateAsync({
-      id: formData.id ?? contract?.id,
-      tenant_id: tenantId,
-      start_date: formData.start_date!,
-      end_date: formData.end_date ?? null,
-      payment_day: effectivePaymentDay,
-      desired_payment_day: desiredPaymentDay ?? null,
-      desired_payment_date: desiredPaymentDate ?? null,
-      rent_value: Number(formData.rent_value),
-      observations: formData.observations ?? null,
-      status: 'active',
-      caution_paid: formData.caution_paid ?? false,
-      caution_value: formData.caution_value ? Number(formData.caution_value) : null,
-      caution_date: formData.caution_date ?? null,
-    });
+    let result: ContractDB;
+    try {
+      result = await upsertContract.mutateAsync({
+        id: formData.id ?? contract?.id,
+        tenant_id: tenantId,
+        start_date: formData.start_date!,
+        end_date: formData.end_date ?? null,
+        payment_day: effectivePaymentDay,
+        desired_payment_day: desiredPaymentDay ?? null,
+        desired_payment_date: desiredPaymentDate ?? null,
+        rent_value: Number(formData.rent_value),
+        observations: formData.observations ?? null,
+        status: 'active',
+        caution_paid: formData.caution_paid ?? false,
+        caution_value: formData.caution_value ? Number(formData.caution_value) : null,
+        caution_date: formData.caution_date ?? null,
+      });
+    } catch (e) {
+      // upsertContract.onError já exibiu o toast; apenas interrompemos aqui
+      return;
+    }
 
     // ✅ CORREÇÃO CRÍTICA: bulkGenerate APENAS para contratos novos
     // Nunca recriar períodos em edições — isso apagaria os registros de pagamento
     if (isNew && result?.id) {
-      await bulkGenerate.mutateAsync({
-        apartmentId,
-        tenantId,
-        contractId: result.id,
-        startDate: formData.start_date!,
-        rentValue: Number(formData.rent_value),
-        paymentDay: formData.payment_day ?? 1,
-      });
+      try {
+        await bulkGenerate.mutateAsync({
+          apartmentId,
+          tenantId,
+          contractId: result.id,
+          startDate: formData.start_date!,
+          rentValue: Number(formData.rent_value),
+          paymentDay: formData.payment_day ?? 1,
+        });
+      } catch (e) {
+        // Contrato foi salvo com sucesso — notificar que os períodos falharam
+        // para que o usuário use o botão "Gerar Períodos" manualmente
+        const msg = e instanceof Error ? e.message : String(e);
+        toast.error(`Contrato salvo, mas falha ao gerar períodos: ${msg}. Use o botão "Gerar Períodos".`, {
+          duration: 10000,
+        });
+      }
     }
 
     setEditing(false);
@@ -132,6 +147,9 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
         rentValue: contract.rent_value,
         paymentDay: contract.payment_day ?? 1,
       });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Erro ao gerar períodos: ${msg}`, { duration: 8000 });
     } finally {
       setGeneratingPeriods(false);
     }
