@@ -232,20 +232,22 @@ export function useBulkGeneratePeriods() {
       const allRecords = generateMonthsForContract(apartmentId, tenantId, contractId, startDate, rentValue, paymentDay);
       const newRecords = allRecords.filter(r => !existingMonths.has(r.month));
 
-      if (newRecords.length === 0) return 0;
+      if (newRecords.length === 0) return { count: 0, apartmentId };
 
       for (let i = 0; i < newRecords.length; i += 500) {
         const batch = newRecords.slice(i, i + 500);
         const { error } = await supabase.from('financial_records').insert(batch);
         if (error) throw error;
       }
-      return newRecords.length;
+      return { count: newRecords.length, apartmentId };
     },
-    onSuccess: (count) => {
+    onSuccess: (result) => {
+      // Invalidate by exact apartment key so FinancialTabDB refreshes immediately
+      qc.invalidateQueries({ queryKey: ['financial_records', result.apartmentId] });
       qc.invalidateQueries({ queryKey: ['financial_records'] });
       qc.invalidateQueries({ queryKey: ['financial_records_all'] });
       qc.invalidateQueries({ queryKey: ['financial_records_year'] });
-      if (count > 0) toast.success(`${count} períodos financeiros gerados!`);
+      if (result.count > 0) toast.success(`${result.count} períodos financeiros gerados!`);
     },
     onError: (e: Error) => toast.error(`Erro ao gerar períodos: ${e.message}`),
   });
