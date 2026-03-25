@@ -14,9 +14,6 @@ export interface ContractDB {
   rent_value: number;
   observations: string | null;
   status: string | null;
-  caution_paid: boolean | null;
-  caution_value: number | null;
-  caution_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -89,39 +86,90 @@ export function useUpsertContract() {
   });
 }
 
+/**
+ * Encerramento de contrato com SOFT-DELETE:
+ *
+ * Em vez de deletar o inquilino (o que apagaria documentos e contratos),
+ * marcamos archived_at no registro do inquilino. Todos os dados ficam
+ * intactos e linkados via tenant_id para a aba "Anteriores".
+ *
+ * Fluxo:
+ * 1. Atualiza contrato → status 'ended', end_date
+ * 2. Marca inquilino como arquivado (archived_at = now)
+ * 3. Registra em previous_tenants (para a listagem na aba Anteriores)
+ * 4. Registros financeiros futuros (não pagos) ficam preservados no histórico
+ * 5. Invalida queries para o apartamento aparecer como "Vago"
+ */
 export function useCloseContract() {
   const qc = useQueryClient();
+
   return useMutation({
     mutationFn: async ({
-      contractId, tenantId, apartmentId, endDate,
+      contractId,
+      tenantId,
+      apartmentId,
+      endDate,
     }: {
-      contractId: string; tenantId: string; apartmentId: string; endDate: string;
+      contractId: string;
+      tenantId: string;
+      apartmentId: string;
+      endDate: string;
     }) => {
+      // 1. Buscar dados do inquilino
       const { data: tenant, error: tenantErr } = await supabase
-        .from('tenants').select('*').eq('id', tenantId).single();
+        .from('tenants')
+        .select('*')
+        .eq('id', tenantId)
+        .single();
       if (tenantErr) throw tenantErr;
       if (!tenant) throw new Error('Inquilino não encontrado');
 
+      // 2. Marcar contrato como encerrado (mantém na tabela para histórico)
       const { error: contractErr } = await supabase
-        .from('contracts').update({ status: 'ended', end_date: endDate }).eq('id', contractId);
+        .from('contracts')
+        .update({ status: 'ended', end_date: endDate })
+        .eq('id', contractId);
       if (contractErr) throw contractErr;
 
+      // 3. Deletar registros financeiros NÃO PAGOS com month APÓS o encerramento.
+      //    Registros pagos e do mês de encerramento são preservados no histórico.
+      const endMonth = endDate.substring(0, 7); // YYYY-MM
+      const { error: deleteRecordsErr } = await supabase
+        .from('financial_records')
+        .delete()
+        .eq('tenant_id', tenantId)
+        .eq('paid', false)
+        .gt('month', endMonth);
+      if (deleteRecordsErr) throw deleteRecordsErr;
+
+      // 4. Soft-delete do inquilino: apenas marca archived_at
+      //    Os documentos, contrato e registros financeiros continuam linkados
+      //    via tenant_id para a aba "Anteriores" usar
       const archivedAt = new Date().toISOString();
       const { error: archiveErr } = await supabase
-        .from('tenants').update({ archived_at: archivedAt }).eq('id', tenantId);
+        .from('tenants')
+        .update({ archived_at: archivedAt })
+        .eq('id', tenantId);
       if (archiveErr) throw archiveErr;
 
-      const { data: prevTenant, error: prevErr } = await supabase
-        .from('previous_tenants').insert({
-          first_name: tenant.first_name, last_name: tenant.last_name,
-          cpf: tenant.cpf, email: tenant.email, phone: tenant.phone,
-          birth_date: tenant.birth_date, apartment_id: apartmentId,
-          original_id: tenantId, archived_at: archivedAt,
-        }).select().single();
+      // 5. Registrar em previous_tenants para a listagem
+      //    original_id aponta para tenants.id → usado para buscar docs/contrato
+      const { data: prevTenant, error: prevErr } = await supabase.from('previous_tenants').insert({
+        first_name: tenant.first_name,
+        last_name: tenant.last_name,
+        cpf: tenant.cpf,
+        email: tenant.email,
+        phone: tenant.phone,
+        birth_date: tenant.birth_date,
+        apartment_id: apartmentId,
+        original_id: tenantId,
+        archived_at: archivedAt,
+      }).select().single();
       if (prevErr) throw prevErr;
 
-      return { apartmentId, tenantId, prevTenantId: prevTenant.id, contractId };
+      return { apartmentId, tenantId, contractId, prevTenantId: prevTenant.id };
     },
+
     onSuccess: ({ apartmentId, tenantId }) => {
       qc.invalidateQueries({ queryKey: ['tenants', apartmentId] });
       qc.invalidateQueries({ queryKey: ['tenants'] });
@@ -130,45 +178,11 @@ export function useCloseContract() {
       qc.invalidateQueries({ queryKey: ['previous_tenants', apartmentId] });
       qc.invalidateQueries({ queryKey: ['previous_tenants'] });
       qc.invalidateQueries({ queryKey: ['financial_records', apartmentId] });
-      qc.invalidateQueries({ queryKey: ['financial_records_year'] });
+      qc.invalidateQueries({ queryKey: ['financial_records_all'] });
+      qc.invalidateQueries({ queryKey: ['apartments', apartmentId] });
       qc.invalidateQueries({ queryKey: ['apartments'] });
+      toast.success('Contrato encerrado! Inquilino movido para histórico.');
     },
     onError: (e: Error) => toast.error(`Erro ao encerrar contrato: ${e.message}`),
-  });
-}
-
-export function useUndoCloseContract() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      contractId, tenantId, prevTenantId, apartmentId,
-    }: {
-      contractId: string; tenantId: string; prevTenantId: string; apartmentId: string;
-    }) => {
-      const { error: tenantErr } = await supabase
-        .from('tenants').update({ archived_at: null }).eq('id', tenantId);
-      if (tenantErr) throw tenantErr;
-
-      const { error: contractErr } = await supabase
-        .from('contracts').update({ status: 'active', end_date: null }).eq('id', contractId);
-      if (contractErr) throw contractErr;
-
-      const { error: prevErr } = await supabase
-        .from('previous_tenants').delete().eq('id', prevTenantId);
-      if (prevErr) throw prevErr;
-
-      return { apartmentId, tenantId };
-    },
-    onSuccess: ({ apartmentId, tenantId }) => {
-      qc.invalidateQueries({ queryKey: ['tenants', apartmentId] });
-      qc.invalidateQueries({ queryKey: ['tenants'] });
-      qc.invalidateQueries({ queryKey: ['contract', tenantId] });
-      qc.invalidateQueries({ queryKey: ['contracts_all'] });
-      qc.invalidateQueries({ queryKey: ['previous_tenants', apartmentId] });
-      qc.invalidateQueries({ queryKey: ['previous_tenants'] });
-      qc.invalidateQueries({ queryKey: ['apartments'] });
-      toast.success('Encerramento desfeito! Contrato reativado.');
-    },
-    onError: (e: Error) => toast.error(`Erro ao desfazer: ${e.message}`),
   });
 }
