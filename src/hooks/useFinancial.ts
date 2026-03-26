@@ -235,10 +235,11 @@ export function useBulkGeneratePeriods() {
       apartmentId: string; tenantId: string; contractId: string;
       startDate: string; rentValue: number; paymentDay: number;
     }) => {
+      // Verifica meses já existentes por apartment_id (o constraint único é apartment+month)
       const { data: existing } = await supabase
         .from('financial_records')
         .select('month')
-        .eq('contract_id', contractId)
+        .eq('apartment_id', apartmentId)
         .limit(10000);
 
       const existingMonths = new Set((existing ?? []).map(r => r.month));
@@ -249,7 +250,9 @@ export function useBulkGeneratePeriods() {
 
       for (let i = 0; i < newRecords.length; i += 500) {
         const batch = newRecords.slice(i, i + 500);
-        const { error } = await supabase.from('financial_records').insert(batch);
+        const { error } = await supabase
+          .from('financial_records')
+          .upsert(batch, { onConflict: 'apartment_id,month', ignoreDuplicates: true });
         if (error) throw error;
       }
       return { count: newRecords.length, apartmentId };
