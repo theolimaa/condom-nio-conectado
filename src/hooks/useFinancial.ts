@@ -4,6 +4,19 @@ import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 import { addMonths } from 'date-fns';
 
+/** Extrai mensagem de erro de qualquer tipo — Error nativo ou PostgrestError do Supabase */
+function errMsg(e: unknown): string {
+  if (!e) return 'Erro desconhecido';
+  if (typeof e === 'string') return e;
+  if (typeof e === 'object') {
+    const obj = e as Record<string, unknown>;
+    if (typeof obj.message === 'string') return obj.message;
+    if (typeof obj.details === 'string') return obj.details;
+    if (typeof obj.hint === 'string') return obj.hint;
+  }
+  return JSON.stringify(e);
+}
+
 export interface FinancialRecordDB {
   id: string;
   apartment_id: string;
@@ -128,7 +141,7 @@ export function useUpsertFinancialRecord() {
       qc.invalidateQueries({ queryKey: ['financial_records_all'] });
       qc.invalidateQueries({ queryKey: ['financial_records_year'] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: unknown) => toast.error(errMsg(e)),
   });
 }
 
@@ -146,7 +159,7 @@ export function useDeleteFinancialRecord() {
       qc.invalidateQueries({ queryKey: ['financial_records_year'] });
       toast.success('Registro removido!');
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: unknown) => toast.error(errMsg(e)),
   });
 }
 
@@ -169,7 +182,7 @@ export function useUpdateUnpaidRentValues() {
       qc.invalidateQueries({ queryKey: ['financial_records_all'] });
       qc.invalidateQueries({ queryKey: ['financial_records_year'] });
     },
-    onError: (e: Error) => toast.error(`Erro ao atualizar valores: ${e.message}`),
+    onError: (e: unknown) => toast.error(`Erro ao atualizar valores: ${errMsg(e)}`),
   });
 }
 
@@ -249,6 +262,6 @@ export function useBulkGeneratePeriods() {
       qc.invalidateQueries({ queryKey: ['financial_records_year'] });
       if (result.count > 0) toast.success(`${result.count} períodos financeiros gerados!`);
     },
-    onError: (e: Error) => toast.error(`Erro ao gerar períodos: ${e.message}`),
+    onError: (e: unknown) => toast.error(`Erro ao gerar períodos: ${errMsg(e)}`, { duration: 10000 }),
   });
 }
