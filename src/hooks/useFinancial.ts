@@ -235,16 +235,41 @@ export function useBulkGeneratePeriods() {
       apartmentId: string; tenantId: string; contractId: string;
       startDate: string; rentValue: number; paymentDay: number;
     }) => {
-      // Verifica meses já existentes por apartment_id (o constraint único é apartment+month)
+      const allRecords = generateMonthsForContract(apartmentId, tenantId, contractId, startDate, rentValue, paymentDay);
+      const allMonths = allRecords.map(r => r.month);
+
+      // Busca registros existentes para esse apartamento nesse intervalo de meses
       const { data: existing } = await supabase
         .from('financial_records')
-        .select('month')
+        .select('month, tenant_id, paid')
         .eq('apartment_id', apartmentId)
+        .in('month', allMonths)
         .limit(10000);
 
-      const existingMonths = new Set((existing ?? []).map(r => r.month));
-      const allRecords = generateMonthsForContract(apartmentId, tenantId, contractId, startDate, rentValue, paymentDay);
-      const newRecords = allRecords.filter(r => !existingMonths.has(r.month));
+      const existingList = existing ?? [];
+
+      // Remove registros NAO PAGOS de OUTROS inquilinos que bloqueiam o insert
+      // (ex: inquilino anterior que saiu no mesmo mes que o novo entrou)
+      const staleMonths = existingList
+        .filter(r => r.tenant_id !== tenantId && !r.paid)
+        .map(r => r.month);
+
+      if (staleMonths.length > 0) {
+        const { error: deleteErr } = await supabase
+          .from('financial_records')
+          .delete()
+          .eq('apartment_id', apartmentId)
+          .neq('tenant_id', tenantId)
+          .eq('paid', false)
+          .in('month', staleMonths);
+        if (deleteErr) throw deleteErr;
+      }
+
+      // Meses que ja existem para ESTE inquilino nao precisam ser recriados
+      const thisTenantsMonths = new Set(
+        existingList.filter(r => r.tenant_id === tenantId).map(r => r.month)
+      );
+      const newRecords = allRecords.filter(r => !thisTenantsMonths.has(r.month));
 
       if (newRecords.length === 0) return { count: 0, apartmentId };
 
@@ -252,7 +277,7 @@ export function useBulkGeneratePeriods() {
         const batch = newRecords.slice(i, i + 500);
         const { error } = await supabase
           .from('financial_records')
-          .upsert(batch, { onConflict: 'apartment_id,month', ignoreDuplicates: true });
+          .insert(batch);
         if (error) throw error;
       }
       return { count: newRecords.length, apartmentId };
