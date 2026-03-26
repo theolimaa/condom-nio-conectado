@@ -87,6 +87,8 @@ export default function Financial() {
  
   let filtered = enriched.filter(r => {
     if (r.month < '2026-01') return false;
+    // Registros nao pagos de contratos encerrados nao devem aparecer
+    if (!r.paid && r.contract?.status === 'ended') return false;
     if (filterCondo !== 'all' && r.condo?.id !== filterCondo) return false;
  
     let dateForFilter: string;
@@ -465,4 +467,3 @@ export default function Financial() {
     </Layout>
   );
 }
- 
