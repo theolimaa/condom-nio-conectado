@@ -214,6 +214,9 @@ export default function Dashboard() {
       if (r.month < contract.start_date.substring(0, 7)) return [];
     }
  
+    // Registros nao pagos de contratos encerrados nao devem aparecer nos totais
+    if (!r.paid && contract?.status === 'ended') return [];
+ 
     const status = getStatus(r, contract?.payment_day, contract?.start_date, contract?.desired_payment_day, contract?.desired_payment_date);
     const dueDateMonth = getDueDateMonth(r, contract);
     const paymentMonth = r.payment_date ? r.payment_date.substring(0, 7) : null;
@@ -644,4 +647,3 @@ export default function Dashboard() {
     </Layout>
   );
 }
- 
