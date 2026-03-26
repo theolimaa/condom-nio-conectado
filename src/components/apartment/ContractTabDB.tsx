@@ -148,8 +148,8 @@ export default function ContractTabDB({ tenantId, apartmentId, tenantName }: {
         paymentDay: contract.payment_day ?? 1,
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast.error(`Erro ao gerar períodos: ${msg}`, { duration: 8000 });
+      // onError do mutation já exibe o toast com a mensagem real
+      console.error('bulkGenerate error:', e);
     } finally {
       setGeneratingPeriods(false);
     }
