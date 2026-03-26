@@ -143,7 +143,7 @@ export function useCloseContract() {
         .delete()
         .eq('tenant_id', tenantId)
         .eq('paid', false)
-        .gt('month', endMonth);
+        .gte('month', endMonth); // inclui o próprio mês de encerramento se não pago
       if (deleteRecordsErr) throw deleteRecordsErr;
 
       // 4. Soft-delete do inquilino: apenas marca archived_at
