@@ -450,7 +450,36 @@ export default function Dashboard() {
     if (selectedMonthKey) return inst.payment_date.startsWith(selectedMonthKey);
     return inst.payment_date.startsWith(String(selectedYear));
   });
-  const installmentsRevenue = paidInstallmentsThisMonth.reduce((s, i) => s + i.amount, 0);
+  const paidInstallmentRows = paidInstallmentsThisMonth.map(inst => {
+    const ag = allDebtAgreements.find(a => a.id === inst.agreement_id);
+    const pt = previousTenants.find(p => p.id === ag?.previous_tenant_id);
+    // Create a shape compatible with DetailModal rows
+    return {
+      id: inst.id,
+      apartment_id: ag?.apartment_id ?? '',
+      tenant_id: pt?.original_id ?? '',
+      contract_id: null,
+      month: inst.payment_date?.substring(0, 7) ?? '',
+      rent_value: inst.amount,
+      paid: true,
+      payment_date: inst.payment_date,
+      paid_amount: null,
+      payment_method: inst.payment_method,
+      debt_paid_amount: null,
+      debt_payment_date: null,
+      debt_payment_method: null,
+      status: 'Acordo',
+      observations: `Parcela ${inst.installment_number}/${ag?.installment_count ?? '?'} do acordo`,
+      receipt_number: null,
+      receipt_generated_at: null,
+      created_at: null,
+      updated_at: null,
+      computedStatus: 'paid',
+      paymentMonth: inst.payment_date?.substring(0, 7) ?? null,
+      isFormer: true,
+    } as any;
+  });
+  const installmentsRevenue = paidInstallmentRows.reduce((s, r) => s + r.rent_value, 0);
  
   const chartData = MONTHS.map((month, idx) => {
     const monthKey = `${chartYear}-${String(idx + 1).padStart(2, '0')}`;
@@ -572,7 +601,7 @@ export default function Dashboard() {
               </div>
             </div>
             <p className="text-xl md:text-2xl font-bold relative z-10" style={{ color: 'hsl(var(--paid))' }}>
-              {formatCurrency(totalReceived + totalCautionReceived)}
+              {formatCurrency(totalReceived + totalCautionReceived + installmentsRevenue)}
             </p>
             <p className="text-xs text-muted-foreground mt-1.5 relative z-10 flex items-center gap-1">
               Ver detalhes <ChevronRight className="w-3 h-3" />
@@ -781,7 +810,10 @@ export default function Dashboard() {
                 const condOccupied = condApts.filter(a => allTenants.some(t => t.apartment_id === a.id)).length;
                 const condReceived = receivedRecords
                   .filter(r => condApts.some(a => a.id === r.apartment_id))
-                  .reduce((s, r) => s + calcReceived(r), 0);
+                  .reduce((s, r) => s + calcReceived(r), 0)
+                  + paidInstallmentRows
+                    .filter(r => condApts.some(a => a.id === r.apartment_id))
+                    .reduce((s, r) => s + r.rent_value, 0);
                 const condOverdue = overdueRecords
                   .filter(r => condApts.some(a => a.id === r.apartment_id))
                   .reduce((s, r) => s + r.rent_value, 0);
@@ -931,7 +963,7 @@ export default function Dashboard() {
  
       <DetailModal open={pendingModal} onClose={() => setPendingModal(false)} title={`A Receber — ${filterLabel} ${selectedYear}`} records={[...pendingRecords, ...pendingInstallmentRows]} tenants={[...allTenants, ...previousTenants.map(pt => ({ id: pt.original_id ?? '', first_name: pt.first_name, last_name: pt.last_name }))]} apartments={apartments} condominiums={condominiums} variant="pending" />
       <DetailModal open={overdueModal} onClose={() => setOverdueModal(false)} title={`Inadimplentes — ${filterLabel} ${selectedYear}`} records={overdueRecords} tenants={allTenants} apartments={apartments} condominiums={condominiums} variant="overdue" />
-      <DetailModal open={receivedModal} onClose={() => setReceivedModal(false)} title={`Receita Recebida — ${filterLabel} ${selectedYear}`} records={[...receivedRecords, ...cautionRows]} tenants={allTenants} apartments={apartments} condominiums={condominiums} variant="received" />
+      <DetailModal open={receivedModal} onClose={() => setReceivedModal(false)} title={`Receita Recebida — ${filterLabel} ${selectedYear}`} records={[...receivedRecords, ...cautionRows, ...paidInstallmentRows]} tenants={[...allTenants, ...previousTenants.map(pt => ({ id: pt.original_id ?? '', first_name: pt.first_name, last_name: pt.last_name }))]} apartments={apartments} condominiums={condominiums} variant="received" />
     </Layout>
   );
 }
