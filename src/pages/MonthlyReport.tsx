@@ -16,12 +16,53 @@ function formatMonthLabel(month: string): string {
   return `${MONTHS[m - 1].slice(0, 3)}/${y}`;
 }
 
+async function loadImageAsDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+type RGB = [number, number, number];
+const PDF_COLORS = {
+  brand: [37, 99, 235] as RGB,
+  brandDark: [29, 78, 216] as RGB,
+  navy: [15, 23, 42] as RGB,
+  ink: [30, 41, 59] as RGB,
+  muted: [100, 116, 139] as RGB,
+  mutedLight: [148, 163, 184] as RGB,
+  border: [226, 232, 240] as RGB,
+  zebra: [248, 250, 252] as RGB,
+  paid: [22, 163, 74] as RGB,
+  paidBg: [220, 252, 231] as RGB,
+  overdue: [220, 38, 38] as RGB,
+  overdueBg: [254, 226, 226] as RGB,
+  pending: [161, 98, 7] as RGB,
+  pendingBg: [254, 249, 195] as RGB,
+};
+
+function statusStyle(status: 'paid' | 'overdue' | 'pending' | null): { label: string; fg: RGB; bg: RGB } | null {
+  if (status === 'paid') return { label: 'Pago', fg: PDF_COLORS.paid, bg: PDF_COLORS.paidBg };
+  if (status === 'overdue') return { label: 'Inadimplente', fg: PDF_COLORS.overdue, bg: PDF_COLORS.overdueBg };
+  if (status === 'pending') return { label: 'A Receber', fg: PDF_COLORS.pending, bg: PDF_COLORS.pendingBg };
+  return null;
+}
+
 export default function MonthlyReport() {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth(); // 0-indexed
   const [selectedYear, setSelectedYear] = useState(String(currentYear));
   const [selectedMonth, setSelectedMonth] = useState(String(currentMonth));
   const [selectedCondo, setSelectedCondo] = useState('all');
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const { data: condominiums = [] } = useCondominiums();
   const { data: apartments = [] } = useApartments();
@@ -111,85 +152,193 @@ export default function MonthlyReport() {
   const grandOverdue = grouped.reduce((s, g) => s + g.totalOverdue, 0);
   const grandOwed = grouped.reduce((s, g) => s + g.totalOwed, 0);
 
-  function generatePDF() {
-    const doc = new jsPDF();
-    const ml = 15;
-    let y = 18;
-    const monthLabel = MONTHS[Number(selectedMonth)];
-    const condoLabel = selectedCondo === 'all' ? 'Todos os condomínios' : condominiums.find(c => c.id === selectedCondo)?.name ?? '';
-    const today = new Date().toLocaleDateString('pt-BR');
+  async function generatePDF() {
+    setGeneratingPdf(true);
+    try {
+      const logoDataUrl = await loadImageAsDataUrl('/icon-192.png');
+      const doc = new jsPDF();
+      const ml = 15;
+      const pageRight = 195;
+      const pageBottom = 282;
+      let y = 40;
+      const monthLabel = MONTHS[Number(selectedMonth)];
+      const condoLabel = selectedCondo === 'all' ? 'Todos os condomínios' : condominiums.find(c => c.id === selectedCondo)?.name ?? '';
+      const today = new Date().toLocaleDateString('pt-BR');
 
-    const addLine = (color: [number, number, number] = [200, 200, 200]) => {
-      doc.setDrawColor(...color);
-      doc.line(ml, y, 195, y);
-      y += 3;
-    };
+      // ── Cabeçalho ──────────────────────────────────────────────────────────
+      const drawMainHeader = () => {
+        doc.setFillColor(...PDF_COLORS.brand);
+        doc.rect(0, 0, 210, 30, 'F');
+        doc.setFillColor(...PDF_COLORS.brandDark);
+        doc.rect(0, 28, 210, 2, 'F');
 
-    doc.setFillColor(59, 130, 246);
-    doc.rect(0, 0, 210, 28, 'F');
-    doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-    doc.text('Living Gest — Relatório Mensal', ml, 12);
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-    doc.text(`${monthLabel} ${selectedYear} • ${condoLabel} • Emitido em ${today}`, ml, 22);
-    y = 36;
+        const textX = logoDataUrl ? ml + 22 : ml;
+        if (logoDataUrl) {
+          try { doc.addImage(logoDataUrl, 'PNG', ml, 6, 16, 16); } catch { /* logo opcional */ }
+        }
+        doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+        doc.text('Living Gest', textX, 14);
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(219, 234, 254);
+        doc.text('Relatório Mensal', textX, 20);
 
-    doc.setFillColor(245, 247, 250);
-    doc.rect(ml - 2, y - 4, 182, 20, 'F');
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
-    doc.text('RESUMO GERAL', ml, y + 1);
-    y += 6;
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(34, 197, 94); doc.text(`Recebido: ${formatCurrency(grandPaid)}`, ml, y);
-    doc.setTextColor(234, 179, 8); doc.text(`A Receber: ${formatCurrency(grandPending)}`, ml + 55, y);
-    doc.setTextColor(239, 68, 68); doc.text(`Inadimplente: ${formatCurrency(grandOverdue)}`, ml + 110, y);
-    if (grandOwed > 0) { doc.setTextColor(161, 98, 7); doc.text(`Devendo: ${formatCurrency(grandOwed)}`, ml + 160, y); }
-    y += 10;
-    addLine([180, 180, 180]);
+        doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+        doc.text(`${monthLabel} ${selectedYear}`, pageRight, 12, { align: 'right' });
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(219, 234, 254);
+        doc.text(condoLabel, pageRight, 17, { align: 'right' });
+        doc.text(`Emitido em ${today}`, pageRight, 22, { align: 'right' });
+      };
 
-    for (const g of grouped) {
-      if (y > 255) { doc.addPage(); y = 15; }
-      doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
-      doc.text(g.condo.name, ml, y);
-      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
-      doc.text(`${g.occupied}/${g.total} ocupados`, ml + 90, y);
-      doc.setTextColor(34, 197, 94); doc.text(`Rec: ${formatCurrency(g.totalPaid)}`, ml + 115, y);
-      doc.setTextColor(239, 68, 68); doc.text(`Inad: ${formatCurrency(g.totalOverdue)}`, ml + 145, y);
-      if (g.totalOwed > 0) { doc.setTextColor(161, 98, 7); doc.text(`Dev: ${formatCurrency(g.totalOwed)}`, ml + 173, y); }
-      y += 6;
-      doc.setFillColor(230, 235, 245);
-      doc.rect(ml - 2, y - 3, 182, 6, 'F');
-      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 60, 60);
-      doc.text('Apto', ml, y + 1); doc.text('Inquilino', ml + 18, y + 1); doc.text('Valor', ml + 95, y + 1);
-      doc.text('Pagamento', ml + 117, y + 1); doc.text('Devendo', ml + 145, y + 1); doc.text('Status', ml + 168, y + 1);
-      y += 7;
+      const drawContinuationHeader = () => {
+        doc.setFillColor(...PDF_COLORS.navy);
+        doc.rect(0, 0, 210, 12, 'F');
+        doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+        doc.text('Living Gest — Relatório Mensal (continuação)', ml, 8);
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(203, 213, 225);
+        doc.text(`${monthLabel} ${selectedYear}`, pageRight, 8, { align: 'right' });
+        y = 20;
+      };
 
-      for (const row of g.rows) {
-        if (y > 270) { doc.addPage(); y = 15; }
-        doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-        doc.text(row.record ? `${row.apt.unit_number} (${formatMonthLabel(row.record.month)})` : row.apt.unit_number, ml, y);
-        const tenantName = row.tenant ? `${row.tenant.first_name} ${row.tenant.last_name}` : '—';
-        doc.text(doc.splitTextToSize(tenantName, 75)[0], ml + 18, y);
-        doc.text(row.record ? formatCurrency(row.record.rent_value) : '—', ml + 95, y);
-        doc.text(row.record?.payment_date ?? '—', ml + 117, y);
-        // Devendo
-        const owedAmt = row.record ? calcOwed(row.record) : 0;
-        if (owedAmt > 0) { doc.setTextColor(161, 98, 7); doc.text(formatCurrency(owedAmt), ml + 145, y); doc.setTextColor(30, 30, 30); }
-        else { doc.setTextColor(150, 150, 150); doc.text('—', ml + 145, y); doc.setTextColor(30, 30, 30); }
-        // Status
-        if (row.status === 'paid') doc.setTextColor(34, 197, 94);
-        else if (row.status === 'overdue') doc.setTextColor(239, 68, 68);
-        else if (row.status === 'pending') doc.setTextColor(234, 179, 8);
-        else doc.setTextColor(150, 150, 150);
-        const statusLabel = row.status === 'paid' ? 'Pago' : row.status === 'overdue' ? 'Inadimplente' : row.status === 'pending' ? 'A Receber' : row.isVacant ? 'Vago' : '—';
-        doc.text(statusLabel, ml + 168, y);
-        doc.setTextColor(30, 30, 30);
-        y += 5;
+      const ensureSpace = (needed: number) => {
+        if (y + needed > pageBottom) {
+          doc.addPage();
+          drawContinuationHeader();
+        }
+      };
+
+      drawMainHeader();
+
+      // ── Resumo geral ──────────────────────────────────────────────────────
+      const stats: { label: string; value: number; color: RGB; sub: string }[] = [
+        { label: 'RECEBIDO', value: grandPaid, color: PDF_COLORS.paid, sub: 'Pagamentos no mês' },
+        { label: 'A RECEBER', value: grandPending, color: PDF_COLORS.pending, sub: 'Vencimento não chegou' },
+        { label: 'INADIMPLENTE', value: grandOverdue, color: PDF_COLORS.overdue, sub: 'Venceu e não pagou' },
+        { label: 'DEVENDO', value: grandOwed, color: grandOwed > 0 ? PDF_COLORS.pending : PDF_COLORS.paid, sub: 'Saldo devedor dos pagos' },
+      ];
+      const boxGap = 4;
+      const boxW = (pageRight - ml - boxGap * 3) / 4;
+      const boxH = 24;
+      stats.forEach((s, i) => {
+        const bx = ml + i * (boxW + boxGap);
+        doc.setDrawColor(...PDF_COLORS.border); doc.setLineWidth(0.3);
+        doc.roundedRect(bx, y, boxW, boxH, 2, 2, 'S');
+        doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...PDF_COLORS.muted);
+        doc.text(s.label, bx + 3, y + 6);
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(...s.color);
+        doc.text(formatCurrency(s.value), bx + 3, y + 14.5);
+        doc.setFontSize(6); doc.setFont('helvetica', 'normal'); doc.setTextColor(...PDF_COLORS.mutedLight);
+        doc.text(doc.splitTextToSize(s.sub, boxW - 6)[0], bx + 3, y + 20);
+      });
+      y += boxH + 10;
+
+      // ── Colunas da tabela (relativas a ml) ────────────────────────────────
+      const col = { apto: 0, ref: 13, inquilino: 28, valor: 103, pagamento: 122, devendo: 145, status: 178 };
+      const inquilinoMaxWidth = col.valor - col.inquilino - 4;
+
+      const drawTableHeader = () => {
+        doc.setFillColor(...PDF_COLORS.zebra);
+        doc.rect(ml - 2, y - 4, 182, 7, 'F');
+        doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...PDF_COLORS.muted);
+        doc.text('APTO', ml + col.apto, y);
+        doc.text('INQUILINO', ml + col.inquilino, y);
+        doc.text('VALOR', ml + col.valor, y, { align: 'right' });
+        doc.text('PAGAMENTO', ml + col.pagamento, y, { align: 'center' });
+        doc.text('DEVENDO', ml + col.devendo, y, { align: 'right' });
+        doc.text('STATUS', ml + col.status, y, { align: 'center' });
+        y += 6;
+      };
+
+      const drawCondoBar = (g: (typeof grouped)[number]) => {
+        doc.setFillColor(...PDF_COLORS.navy);
+        doc.roundedRect(ml - 2, y - 5, 182, 9, 1.5, 1.5, 'F');
+        doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+        doc.text(g.condo.name, ml, y);
+
+        const chips: { text: string; color: RGB }[] = [{ text: `${g.occupied}/${g.total} ocupados`, color: [203, 213, 225] }];
+        chips.push({ text: `Rec ${formatCurrency(g.totalPaid)}`, color: [134, 239, 172] });
+        if (g.totalOverdue > 0) chips.push({ text: `Inad ${formatCurrency(g.totalOverdue)}`, color: [252, 165, 165] });
+        if (g.totalOwed > 0) chips.push({ text: `Dev ${formatCurrency(g.totalOwed)}`, color: [253, 224, 71] });
+        doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
+        let cursorX = pageRight - 2;
+        for (let i = chips.length - 1; i >= 0; i--) {
+          doc.setTextColor(...chips[i].color);
+          doc.text(chips[i].text, cursorX, y, { align: 'right' });
+          cursorX -= doc.getTextWidth(chips[i].text) + 6;
+        }
+        y += 9;
+      };
+
+      for (const g of grouped) {
+        ensureSpace(9 + 6);
+        drawCondoBar(g);
+        drawTableHeader();
+
+        g.rows.forEach((row, i) => {
+          if (y + 6 > pageBottom) {
+            doc.addPage();
+            drawContinuationHeader();
+            drawTableHeader();
+          }
+          if (i % 2 === 1) {
+            doc.setFillColor(...PDF_COLORS.zebra);
+            doc.rect(ml - 2, y - 4, 182, 6, 'F');
+          }
+
+          doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...PDF_COLORS.ink);
+          doc.text(row.apt.unit_number, ml + col.apto, y);
+          if (row.record) {
+            doc.setFontSize(6); doc.setFont('helvetica', 'normal'); doc.setTextColor(...PDF_COLORS.mutedLight);
+            doc.text(formatMonthLabel(row.record.month), ml + col.ref, y);
+          }
+
+          doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...PDF_COLORS.ink);
+          const tenantName = row.tenant ? `${row.tenant.first_name} ${row.tenant.last_name}` : '—';
+          doc.text(doc.splitTextToSize(tenantName, inquilinoMaxWidth)[0], ml + col.inquilino, y);
+
+          doc.setFont('helvetica', 'bold');
+          doc.text(row.record ? formatCurrency(row.record.rent_value) : '—', ml + col.valor, y, { align: 'right' });
+          doc.setFont('helvetica', 'normal');
+
+          doc.setFontSize(7); doc.setTextColor(...PDF_COLORS.muted);
+          doc.text(row.record?.payment_date ?? '—', ml + col.pagamento, y, { align: 'center' });
+
+          const owedAmt = row.record ? calcOwed(row.record) : 0;
+          doc.setFontSize(7.5);
+          if (owedAmt > 0) { doc.setTextColor(...PDF_COLORS.pending); doc.text(formatCurrency(owedAmt), ml + col.devendo, y, { align: 'right' }); }
+          else { doc.setTextColor(...PDF_COLORS.mutedLight); doc.text('—', ml + col.devendo, y, { align: 'right' }); }
+
+          const style = statusStyle(row.status);
+          if (style) {
+            doc.setFontSize(6.5); doc.setFont('helvetica', 'bold');
+            const textW = doc.getTextWidth(style.label);
+            const pillW = textW + 5;
+            doc.setFillColor(...style.bg);
+            doc.roundedRect(ml + col.status - pillW / 2, y - 3.3, pillW, 4.6, 2, 2, 'F');
+            doc.setTextColor(...style.fg);
+            doc.text(style.label, ml + col.status, y, { align: 'center' });
+            doc.setFont('helvetica', 'normal');
+          } else {
+            doc.setFontSize(7); doc.setTextColor(...PDF_COLORS.mutedLight);
+            doc.text(row.isVacant ? 'Vago' : '—', ml + col.status, y, { align: 'center' });
+          }
+
+          y += 6;
+        });
+        y += 6;
       }
-      y += 4;
-      addLine();
-    }
 
-    doc.save(`Relatorio-${monthLabel}-${selectedYear}.pdf`);
+      // ── Rodapé ────────────────────────────────────────────────────────────
+      const totalPages = doc.getNumberOfPages();
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...PDF_COLORS.mutedLight);
+        doc.text('Living Gest', ml, 291);
+        doc.text(`Página ${p} de ${totalPages}`, pageRight, 291, { align: 'right' });
+      }
+
+      doc.save(`Relatorio-${monthLabel}-${selectedYear}.pdf`);
+    } finally {
+      setGeneratingPdf(false);
+    }
   }
 
   return (
@@ -203,9 +352,9 @@ export default function MonthlyReport() {
             </h1>
             <p className="text-muted-foreground text-sm">Visão completa de todos os apartamentos por mês</p>
           </div>
-          <Button onClick={generatePDF} disabled={isLoading}>
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
-            Baixar PDF
+          <Button onClick={generatePDF} disabled={isLoading || generatingPdf}>
+            {(isLoading || generatingPdf) ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
+            {generatingPdf ? 'Gerando...' : 'Baixar PDF'}
           </Button>
         </div>
 
