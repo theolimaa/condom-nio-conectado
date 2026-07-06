@@ -11,6 +11,10 @@ import { useFinancialRecordsByYear, FinancialRecordDB, calcReceived, calcOwed } 
 import { useContracts } from '@/hooks/useContracts';
 import jsPDF from 'jspdf';
 
+function formatMonthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  return `${MONTHS[m - 1].slice(0, 3)}/${y}`;
+}
 
 export default function MonthlyReport() {
   const currentYear = new Date().getFullYear();
@@ -162,7 +166,7 @@ export default function MonthlyReport() {
       for (const row of g.rows) {
         if (y > 270) { doc.addPage(); y = 15; }
         doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-        doc.text(row.apt.unit_number, ml, y);
+        doc.text(row.record ? `${row.apt.unit_number} (${formatMonthLabel(row.record.month)})` : row.apt.unit_number, ml, y);
         const tenantName = row.tenant ? `${row.tenant.first_name} ${row.tenant.last_name}` : '—';
         doc.text(doc.splitTextToSize(tenantName, 75)[0], ml + 18, y);
         doc.text(row.record ? formatCurrency(row.record.rent_value) : '—', ml + 95, y);
@@ -281,7 +285,10 @@ export default function MonthlyReport() {
                   <tbody>
                     {g.rows.map(row => (
                       <tr key={row.record?.id ?? row.apt.id} className="border-b border-border/50 last:border-0">
-                        <td className="px-3 py-2 font-medium">{row.apt.unit_number}</td>
+                        <td className="px-3 py-2 font-medium">
+                          {row.apt.unit_number}
+                          {row.record && <span className="block text-[10px] font-normal text-muted-foreground">ref. {formatMonthLabel(row.record.month)}</span>}
+                        </td>
                         <td className="px-3 py-2 text-muted-foreground hidden sm:table-cell">
                           {row.tenant ? `${row.tenant.first_name} ${row.tenant.last_name}` : '—'}
                         </td>
