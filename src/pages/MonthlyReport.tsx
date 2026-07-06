@@ -74,18 +74,23 @@ export default function MonthlyReport() {
         condoApts.some(a => a.id === r.apartment_id)
       );
 
-      const rows = condoApts.map(apt => {
-        const record = condoRecords.find(r => r.apartment_id === apt.id);
-        const tenant = allTenants.find(t => t.id === record?.tenant_id);
+      const rows = condoApts.flatMap(apt => {
+        // Um apartamento pode ter mais de um registro caindo no mesmo mês do relatório
+        // (ex: aluguel do mês anterior venceu agora e não foi pago, e o do mês atual já foi pago).
+        // Mostrar todos evita que um registro inadimplente fique escondido atrás de um pago.
+        const records = condoRecords.filter(r => r.apartment_id === apt.id);
 
-        if (record) {
-          return { apt, record, tenant, status: record.computedStatus, isVacant: false };
+        if (records.length > 0) {
+          return records.map(record => {
+            const tenant = allTenants.find(t => t.id === record.tenant_id);
+            return { apt, record, tenant, status: record.computedStatus, isVacant: false };
+          });
         }
 
         // Sem registro: vago = não tem nenhum tenant ativo (não arquivado) no apartamento
         const hasActiveTenant = allTenants.some(t => t.apartment_id === apt.id && !t.archived_at);
 
-        return { apt, record: null, tenant: null, status: null, isVacant: !hasActiveTenant };
+        return [{ apt, record: null, tenant: null, status: null, isVacant: !hasActiveTenant }];
       });
 
       const totalPaid = condoRecords.filter(r => r.computedStatus === 'paid').reduce((s, r) => s + calcReceived(r), 0);
@@ -275,7 +280,7 @@ export default function MonthlyReport() {
                   </thead>
                   <tbody>
                     {g.rows.map(row => (
-                      <tr key={row.apt.id} className="border-b border-border/50 last:border-0">
+                      <tr key={row.record?.id ?? row.apt.id} className="border-b border-border/50 last:border-0">
                         <td className="px-3 py-2 font-medium">{row.apt.unit_number}</td>
                         <td className="px-3 py-2 text-muted-foreground hidden sm:table-cell">
                           {row.tenant ? `${row.tenant.first_name} ${row.tenant.last_name}` : '—'}
