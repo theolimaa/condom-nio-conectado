@@ -65,8 +65,8 @@ export default function Financial() {
     const condo = apt ? condominiums.find(c => c.id === apt.condominium_id) : null;
     const tenant = allTenants.find(t => t.id === r.tenant_id);
     const contract = contracts.find(c => c.id === r.contract_id);
-    const status = computeRecordStatus(r.paid, r.month, contract?.payment_day, contract?.start_date);
-    const dueDate = getRecordDueDate(r.month, contract?.start_date, contract?.payment_day);
+    const status = computeRecordStatus(r.paid, r.month, contract?.payment_day, contract?.start_date, contract?.desired_payment_day, contract?.desired_payment_date);
+    const dueDate = getRecordDueDate(r.month, contract?.start_date, contract?.payment_day, contract?.desired_payment_day, contract?.desired_payment_date);
     return { ...r, apt, condo, tenant, contract, computedStatus: status, dueDate };
   });
  

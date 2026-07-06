@@ -104,17 +104,21 @@ export function computeRecordStatus(
   paid: boolean | null,
   month: string,
   paymentDay?: number | null,
-  contractStartDate?: string | null
+  contractStartDate?: string | null,
+  desiredPaymentDay?: number | null,
+  desiredPaymentDate?: string | null
 ): 'paid' | 'overdue' | 'pending' {
   if (paid) return 'paid';
-  return getRecordStatus(month, paymentDay, contractStartDate);
+  return getRecordStatus(month, paymentDay, contractStartDate, desiredPaymentDay, desiredPaymentDate);
 }
 
 export function getRecordDueDate(
   month: string,
   contractStartDate: string | null | undefined,
-  paymentDay: number | null | undefined
+  paymentDay: number | null | undefined,
+  desiredPaymentDay?: number | null,
+  desiredPaymentDate?: string | null
 ): string {
-  const { dueDateStr } = getPeriodAndDueDate(month, contractStartDate ?? null, paymentDay ?? 1);
+  const { dueDateStr } = getPeriodAndDueDate(month, contractStartDate ?? null, paymentDay ?? 1, desiredPaymentDay, desiredPaymentDate);
   return dueDateStr;
 }

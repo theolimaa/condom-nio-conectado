@@ -35,8 +35,8 @@ export default function MonthlyReport() {
   const enriched = financialRecords.map(r => {
     const apt = apartments.find(a => a.id === r.apartment_id);
     const contract = contracts.find(c => c.id === r.contract_id);
-    const dueDate = getRecordDueDate(r.month, contract?.start_date, contract?.payment_day);
-    const status = computeRecordStatus(r.paid, r.month, contract?.payment_day, contract?.start_date);
+    const dueDate = getRecordDueDate(r.month, contract?.start_date, contract?.payment_day, contract?.desired_payment_day, contract?.desired_payment_date);
+    const status = computeRecordStatus(r.paid, r.month, contract?.payment_day, contract?.start_date, contract?.desired_payment_day, contract?.desired_payment_date);
     return { ...r, apt, contract, dueDate, computedStatus: status };
   });
 
