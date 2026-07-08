@@ -116,6 +116,8 @@ export default function Receipts() {
             tenantCpf: r.tenant!.cpf,
             contractPaymentDay: r.contract?.payment_day,
             contractStartDate: r.contract?.start_date,
+            contractDesiredPaymentDay: r.contract?.desired_payment_day,
+            contractDesiredPaymentDate: r.contract?.desired_payment_date,
             contractCautionPaid: r.contract?.caution_paid,
             contractCautionValue: r.contract?.caution_value,
             contractCautionDate: r.contract?.caution_date,

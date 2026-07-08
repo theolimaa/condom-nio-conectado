@@ -315,7 +315,7 @@ export default function Financial() {
                 {filtered.map(r => {
                   const contractStartDate = r.contract?.start_date ?? null;
                   const paymentDay = r.contract?.payment_day ?? 1;
-                  const { periodLabel, dueDateLabel } = getPeriodAndDueDate(r.month, contractStartDate, paymentDay);
+                  const { periodLabel, dueDateLabel } = getPeriodAndDueDate(r.month, contractStartDate, paymentDay, r.contract?.desired_payment_day, r.contract?.desired_payment_date);
                   const owed = calcOwed(r);
                   const received = calcReceived(r);
                   return (

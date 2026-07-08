@@ -198,6 +198,8 @@ export default function PreviousTenants() {
         tenantCpf: pt.cpf,
         contractPaymentDay: pt.contract?.payment_day,
         contractStartDate: pt.contract?.start_date,
+        contractDesiredPaymentDay: pt.contract?.desired_payment_day,
+        contractDesiredPaymentDate: pt.contract?.desired_payment_date,
         contractCautionPaid: pt.contract?.caution_paid,
         contractCautionValue: pt.contract?.caution_value,
         contractCautionDate: pt.contract?.caution_date,

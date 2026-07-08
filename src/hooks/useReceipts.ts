@@ -230,7 +230,7 @@ export function useBulkSaveReceipts() {
           *,
           apartments!inner(id, unit_number, condominium_id, condominiums!inner(name)),
           tenants(id, first_name, last_name, cpf),
-          contracts(id, payment_day, start_date, caution_paid, caution_value, caution_date)
+          contracts(id, payment_day, start_date, desired_payment_day, desired_payment_date, caution_paid, caution_value, caution_date)
         `
         )
         .eq('paid', true)
@@ -303,6 +303,8 @@ export function useBulkSaveReceipts() {
             tenantCpf: ten.cpf,
             contractPaymentDay: con?.payment_day,
             contractStartDate: con?.start_date,
+            contractDesiredPaymentDay: con?.desired_payment_day,
+            contractDesiredPaymentDate: con?.desired_payment_date,
             contractCautionPaid: con?.caution_paid,
             contractCautionValue: con?.caution_value,
             contractCautionDate: con?.caution_date,

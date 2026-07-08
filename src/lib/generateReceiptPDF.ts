@@ -11,6 +11,8 @@ export interface ReceiptPDFInput {
   tenantCpf?: string | null;
   contractPaymentDay?: number | null;
   contractStartDate?: string | null;
+  contractDesiredPaymentDay?: number | null;
+  contractDesiredPaymentDate?: string | null;
   contractCautionPaid?: boolean | null;
   contractCautionValue?: number | null;
   contractCautionDate?: string | null;
@@ -67,6 +69,8 @@ export function buildReceiptPDF(input: ReceiptPDFInput): Uint8Array {
     tenantCpf,
     contractPaymentDay,
     contractStartDate,
+    contractDesiredPaymentDay,
+    contractDesiredPaymentDate,
     contractCautionPaid,
     contractCautionValue,
     contractCautionDate,
@@ -101,7 +105,7 @@ export function buildReceiptPDF(input: ReceiptPDFInput): Uint8Array {
     .sort((a, b) => a.month.localeCompare(b.month))
     .slice(0, 12);
 
-  const { periodLabel: rawPeriodLabel } = getPeriodAndDueDate(record.month, contractStartDate ?? null, paymentDay);
+  const { periodLabel: rawPeriodLabel } = getPeriodAndDueDate(record.month, contractStartDate ?? null, paymentDay, contractDesiredPaymentDay, contractDesiredPaymentDate);
   // Ajusta o último período de contrato encerrado: substitui fim pelo dia real de saída
   function applyEndDate(label: string, month: string): string {
     if (!contractEndDate) return label;
@@ -207,7 +211,7 @@ export function buildReceiptPDF(input: ReceiptPDFInput): Uint8Array {
   let totalOwed = 0;
   doc.setFont('helvetica', 'normal');
   yearRecords.forEach(r => {
-    const { periodLabel: rawPLabel } = getPeriodAndDueDate(r.month, contractStartDate ?? null, paymentDay);
+    const { periodLabel: rawPLabel } = getPeriodAndDueDate(r.month, contractStartDate ?? null, paymentDay, contractDesiredPaymentDay, contractDesiredPaymentDate);
     const pLabel = applyEndDate(rawPLabel, r.month);
     const received = calcReceived(r);
     const owed = r.paid ? calcOwed(r) : r.rent_value; // não pagos = devendo o valor todo
