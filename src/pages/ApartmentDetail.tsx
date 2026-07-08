@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Plus, UserCheck, UserX, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -125,8 +125,9 @@ function AddTenantModal({
 export default function ApartmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [showAddTenant, setShowAddTenant] = useState(false);
-  const [activeTab, setActiveTab] = useState('tenant');
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') ?? 'tenant');
 
   const { data: apartment, isLoading: loadingApt } = useApartment(id!);
   const { data: tenants = [], isLoading: loadingTenants } = useTenants(id);

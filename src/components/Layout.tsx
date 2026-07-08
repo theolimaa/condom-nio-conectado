@@ -18,10 +18,12 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
- 
+import NotificationBell from '@/components/NotificationBell';
+
 const INACTIVITY_TIMEOUT = 15 * 60 * 1000;
- 
+
 const navItems = [
+  { label: 'Início', icon: Home, path: '/' },
   { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
   {
     label: 'Financeiro',
@@ -101,30 +103,32 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           className="flex items-center gap-3 px-4 py-4 shrink-0"
           style={{ borderBottom: '1px solid hsl(var(--sidebar-border))' }}
         >
-          <img
-            src="/logo.png"
-            alt="Living Gest"
-            className="w-8 h-8 rounded-lg shrink-0"
-            style={{ boxShadow: '0 2px 8px hsl(217 91% 55% / 0.35)' }}
-          />
-          <div
-            className="overflow-hidden transition-all duration-300"
-            style={{
-              width: expanded ? 'auto' : 0,
-              opacity: expanded ? 1 : 0,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <p
-              className="text-sm font-bold leading-tight"
-              style={{ color: 'hsl(218 22% 92%)' }}
+          <Link to="/" className="flex items-center gap-3 min-w-0">
+            <img
+              src="/logo.png"
+              alt="Living Gest"
+              className="w-8 h-8 rounded-lg shrink-0"
+              style={{ boxShadow: '0 2px 8px hsl(217 91% 55% / 0.35)' }}
+            />
+            <div
+              className="overflow-hidden transition-all duration-300"
+              style={{
+                width: expanded ? 'auto' : 0,
+                opacity: expanded ? 1 : 0,
+                whiteSpace: 'nowrap',
+              }}
             >
-              Living Gest
-            </p>
-            <p className="text-xs" style={{ color: 'hsl(var(--sidebar-foreground))' }}>
-              Gestão de Imóveis
-            </p>
-          </div>
+              <p
+                className="text-sm font-bold leading-tight"
+                style={{ color: 'hsl(218 22% 92%)' }}
+              >
+                Living Gest
+              </p>
+              <p className="text-xs" style={{ color: 'hsl(var(--sidebar-foreground))' }}>
+                Gestão de Imóveis
+              </p>
+            </div>
+          </Link>
           {mobile && (
             <button
               onClick={() => setMobileMenuOpen(false)}
@@ -143,7 +147,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           )}
  
           {navItems.map(item => {
-            const isActive = location.pathname.startsWith(item.path);
+            const isActive = item.path === '/'
+              ? location.pathname === '/'
+              : location.pathname.startsWith(item.path);
             if (item.children) {
               return (
                 <div key={item.path}>
@@ -348,8 +354,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               Living Gest
             </span>
           </div>
+          <div className="ml-auto">
+            <NotificationBell />
+          </div>
         </header>
- 
+
+        {/* Desktop top bar */}
+        <header
+          className="hidden md:flex items-center justify-end px-6 py-2.5 border-b shrink-0"
+          style={{ background: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
+        >
+          <NotificationBell />
+        </header>
+
         <main className="flex-1 overflow-y-auto overflow-x-hidden">
           {children}
         </main>
