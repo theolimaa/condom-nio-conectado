@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2, Wallet, FileText, FileBarChart2, DoorOpen, Files, History, User,
@@ -18,8 +19,11 @@ function getGreeting(): string {
   return 'Boa noite';
 }
 
+const OVERDUE_PREVIEW_COUNT = 4;
+
 export default function Home() {
   const navigate = useNavigate();
+  const [showAllOverdue, setShowAllOverdue] = useState(false);
   const { user } = useAuth();
   const { data: condominiums = [] } = useCondominiums();
   const { data: apartments = [] } = useApartments();
@@ -100,7 +104,7 @@ export default function Home() {
               </button>
             </div>
             <ul className="divide-y divide-border">
-              {overdueItems.slice(0, 4).map(item => (
+              {(showAllOverdue ? overdueItems : overdueItems.slice(0, OVERDUE_PREVIEW_COUNT)).map(item => (
                 <li key={item.apartmentId}>
                   <button
                     onClick={() => navigate(`/apartments/${item.apartmentId}?tab=financial`)}
@@ -121,6 +125,14 @@ export default function Home() {
                 </li>
               ))}
             </ul>
+            {overdueItems.length > OVERDUE_PREVIEW_COUNT && (
+              <button
+                onClick={() => setShowAllOverdue(v => !v)}
+                className="w-full px-4 py-2.5 border-t border-border text-xs font-semibold text-primary hover:bg-muted/50 transition-colors"
+              >
+                {showAllOverdue ? 'Ver menos' : `Ver mais (${overdueItems.length - OVERDUE_PREVIEW_COUNT})`}
+              </button>
+            )}
           </div>
         )}
 
