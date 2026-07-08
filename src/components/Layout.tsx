@@ -7,6 +7,7 @@ import {
   Menu,
   X,
   Home,
+  Building2,
   Wallet,
   FileBarChart2,
   DoorOpen,
@@ -25,6 +26,7 @@ const INACTIVITY_TIMEOUT = 15 * 60 * 1000;
 const navItems = [
   { label: 'Início', icon: Home, path: '/' },
   { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+  { label: 'Condomínios', icon: Building2, path: '/condominios' },
   {
     label: 'Financeiro',
     icon: Wallet,

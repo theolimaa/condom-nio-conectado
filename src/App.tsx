@@ -12,6 +12,7 @@ import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
+import Condominiums from "./pages/Condominiums";
 import Financial from "./pages/Financial";
 import MonthlyReport from "./pages/MonthlyReport";
 import VacancyIndex from "./pages/VacancyIndex";
@@ -57,6 +58,7 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/condominios" element={<ProtectedRoute><Condominiums /></ProtectedRoute>} />
       <Route path="/financeiro" element={<ProtectedRoute><Financial /></ProtectedRoute>} />
       <Route path="/financeiro/relatorio" element={<ProtectedRoute><MonthlyReport /></ProtectedRoute>} />
       <Route path="/financeiro/vacancia" element={<ProtectedRoute><VacancyIndex /></ProtectedRoute>} />

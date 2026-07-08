@@ -293,7 +293,7 @@ export default function CondominiumDetail() {
           <Button
             variant="outline"
             className="mt-4"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/condominios')}
           >
             Voltar
           </Button>
@@ -309,7 +309,7 @@ export default function CondominiumDetail() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate('/condominios')}
                 className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
               >
                 <ChevronLeft className="w-5 h-5" />

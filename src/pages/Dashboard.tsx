@@ -1,17 +1,13 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Building2, Home, TrendingUp, TrendingDown, DollarSign, Pencil, Trash2, ArrowUpDown, AlertTriangle, ChevronRight, History, Handshake, Clock, Target, Award } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Link } from 'react-router-dom';
+import { Home, TrendingUp, TrendingDown, DollarSign, ArrowUpDown, AlertTriangle, ChevronRight, History, Handshake, Clock, Target, Award } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { formatCurrency, formatDate, MONTHS, YEARS, getRecordStatus, getPeriodAndDueDate } from '@/lib/utils-app';
 import { useApp } from '@/lib/store';
 import GlobalFilter from '@/components/GlobalFilter';
 import Layout from '@/components/Layout';
-import { useCondominiums, useAddCondominium, useUpdateCondominium, useDeleteCondominium, CondominiumDB } from '@/hooks/useCondominiums';
+import { useCondominiums } from '@/hooks/useCondominiums';
 import { useApartments } from '@/hooks/useApartments';
 import { useAllFinancialRecords, FinancialRecordDB, calcReceived, calcOwed } from '@/hooks/useFinancial';
 import { useContracts } from '@/hooks/useContracts';
@@ -37,37 +33,6 @@ function getDueDateMonth(record: FinancialRecordDB, contract?: { start_date?: st
   const parts = dueDateLabel.split('/');
   if (parts.length !== 3) return null;
   return `${parts[2]}-${parts[1]}`;
-}
- 
-function CondominiumModal({ open, onClose, initial }: { open: boolean; onClose: () => void; initial?: CondominiumDB }) {
-  const addCond = useAddCondominium();
-  const updateCond = useUpdateCondominium();
-  const [name, setName] = useState(initial?.name ?? '');
-  async function handleSave() {
-    if (!name) return;
-    if (initial) { await updateCond.mutateAsync({ id: initial.id, name }); }
-    else { await addCond.mutateAsync(name); }
-    onClose();
-  }
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{initial ? 'Editar Condomínio' : 'Novo Condomínio'}</DialogTitle></DialogHeader>
-        <div className="space-y-4 py-2">
-          <div>
-            <Label>Nome *</Label>
-            <Input className="mt-1" value={name} onChange={e => setName(e.target.value)} placeholder="Residencial Alfa" />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={addCond.isPending || updateCond.isPending}>
-            {initial ? 'Salvar' : 'Adicionar'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
 }
  
 function getDescription(r: any): string {
@@ -200,17 +165,13 @@ function DetailModal({ open, onClose, title, records, tenants, apartments, condo
 }
  
 export default function Dashboard() {
-  const navigate = useNavigate();
   const { state } = useApp();
-  const [showAdd, setShowAdd] = useState(false);
-  const [editCond, setEditCond] = useState<CondominiumDB | null>(null);
-  const [deleteCond, setDeleteCond] = useState<CondominiumDB | null>(null);
   const [pendingModal, setPendingModal] = useState(false);
   const [overdueModal, setOverdueModal] = useState(false);
   const [receivedModal, setReceivedModal] = useState(false);
   const [debtModal, setDebtModal] = useState(false);
- 
-  const { data: condominiums = [], isLoading: loadingConds } = useCondominiums();
+
+  const { data: condominiums = [] } = useCondominiums();
   const { data: apartments = [] } = useApartments();
   const { data: financialRecords = [] } = useAllFinancialRecords();
   const { data: contracts = [] } = useContracts();
@@ -218,8 +179,7 @@ export default function Dashboard() {
   const { data: previousTenants = [] } = useAllPreviousTenants();
   const { data: debtInstallments = [] } = useAllDebtInstallments();
   const { data: allDebtAgreements = [] } = useAllDebtAgreements();
-  const deleteCondo = useDeleteCondominium();
- 
+
   const { selectedYear, selectedMonth } = state;
   const [chartYear, setChartYear] = useState(String(selectedYear));
   const [chartCondo, setChartCondo] = useState<string>('all');
@@ -574,16 +534,10 @@ export default function Dashboard() {
             </div>
             <div className="hidden sm:flex items-center gap-2 shrink-0">
               <GlobalFilter />
-              <Button onClick={() => setShowAdd(true)} className="btn-primary-glow gap-1.5">
-                <Plus className="w-4 h-4" /> Novo Condomínio
-              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:hidden">
-            <div className="flex-1"><GlobalFilter /></div>
-            <Button onClick={() => setShowAdd(true)} size="sm" className="shrink-0 gap-1">
-              <Plus className="w-4 h-4" /> Cond.
-            </Button>
+          <div className="sm:hidden">
+            <GlobalFilter />
           </div>
         </div>
  
@@ -776,153 +730,8 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
  
-        {/* ── Condominiums Grid ──────────────────────────────────────── */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="section-title">Condomínios</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {condominiums.length} condomínio{condominiums.length !== 1 ? 's' : ''} cadastrado{condominiums.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-          </div>
- 
-          {loadingConds ? (
-            <div className="flex items-center justify-center py-16">
-              <div
-                className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin"
-                style={{ borderColor: 'hsl(var(--primary) / 0.3)', borderTopColor: 'hsl(var(--primary))' }}
-              />
-            </div>
-          ) : condominiums.length === 0 ? (
-            <div className="empty-state">
-              <Building2 className="empty-state-icon" />
-              <p className="font-medium text-muted-foreground mb-1">Nenhum condomínio cadastrado</p>
-              <p className="text-sm text-muted-foreground mb-4">Comece adicionando seu primeiro condomínio</p>
-              <Button onClick={() => setShowAdd(true)} className="btn-primary-glow gap-1.5">
-                <Plus className="w-4 h-4" /> Adicionar Condomínio
-              </Button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
-              {condominiums.map(cond => {
-                const condApts = apartments.filter(a => a.condominium_id === cond.id);
-                const condOccupied = condApts.filter(a => allTenants.some(t => t.apartment_id === a.id)).length;
-                const condReceived = receivedRecords
-                  .filter(r => condApts.some(a => a.id === r.apartment_id))
-                  .reduce((s, r) => s + calcReceived(r), 0)
-                  + paidInstallmentRows
-                    .filter(r => condApts.some(a => a.id === r.apartment_id))
-                    .reduce((s, r) => s + r.rent_value, 0);
-                const condOverdue = overdueRecords
-                  .filter(r => condApts.some(a => a.id === r.apartment_id))
-                  .reduce((s, r) => s + r.rent_value, 0);
-                const occupancyPct = condApts.length > 0 ? Math.round((condOccupied / condApts.length) * 100) : 0;
- 
-                return (
-                  <div
-                    key={cond.id}
-                    className="condo-card"
-                    onClick={() => navigate(`/condominiums/${cond.id}`)}
-                  >
-                    {/* Card top accent bar */}
-                    <div
-                      className="h-1 w-full"
-                      style={{ background: 'linear-gradient(90deg, hsl(217 91% 50%), hsl(238 83% 62%))' }}
-                    />
-                    <div className="p-5">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                            style={{
-                              background: 'linear-gradient(135deg, hsl(217 91% 50% / 0.12), hsl(238 83% 62% / 0.08))',
-                              border: '1px solid hsl(217 91% 50% / 0.15)',
-                            }}
-                          >
-                            <Building2 className="w-5 h-5 text-primary" />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-sm leading-tight">{cond.name}</h3>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {condApts.length} apt{condApts.length !== 1 ? 's' : ''} · {occupancyPct}% ocupado
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex gap-1">
-                          <button
-                            onClick={e => { e.stopPropagation(); setEditCond(cond); }}
-                            className="p-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={e => { e.stopPropagation(); setDeleteCond(cond); }}
-                            className="p-1.5 rounded-md transition-colors text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
- 
-                      {/* Occupancy bar */}
-                      <div className="mb-4">
-                        <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-                          <span>Ocupação</span>
-                          <span className="font-medium">{condOccupied}/{condApts.length}</span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-500"
-                            style={{
-                              width: `${occupancyPct}%`,
-                              background: occupancyPct > 0 ? 'linear-gradient(90deg, hsl(142 72% 42%), hsl(142 72% 50%))' : 'hsl(var(--muted-foreground))',
-                            }}
-                          />
-                        </div>
-                      </div>
- 
-                      {/* Financial row */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div
-                          className="rounded-lg p-2.5"
-                          style={{ background: 'hsl(var(--muted) / 0.5)' }}
-                        >
-                          <p className="text-xs text-muted-foreground mb-0.5">Recebido</p>
-                          <p className="text-sm font-bold" style={{ color: 'hsl(var(--paid))' }}>
-                            {formatCurrency(condReceived)}
-                          </p>
-                        </div>
-                        <div
-                          className="rounded-lg p-2.5"
-                          style={{ background: condOverdue > 0 ? 'hsl(var(--overdue) / 0.06)' : 'hsl(var(--muted) / 0.5)' }}
-                        >
-                          <p className="text-xs text-muted-foreground mb-0.5">Inadimpl.</p>
-                          <p
-                            className="text-sm font-bold"
-                            style={{ color: condOverdue > 0 ? 'hsl(var(--overdue))' : 'hsl(var(--muted-foreground))' }}
-                          >
-                            {condOverdue > 0 ? formatCurrency(condOverdue) : '—'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
- 
-                    <div
-                      className="border-t px-5 py-3 flex items-center justify-between"
-                      style={{ borderColor: 'hsl(var(--border))' }}
-                    >
-                      <span className="text-xs text-muted-foreground">Ver apartamentos</span>
-                      <ChevronRight className="w-4 h-4 text-primary" />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
       </div>
- 
+
       {/* Modals */}
       <DetailModal
         open={debtModal}
@@ -937,29 +746,6 @@ export default function Dashboard() {
         condominiums={condominiums}
         variant="debt"
       />
- 
-      <CondominiumModal open={showAdd} onClose={() => setShowAdd(false)} />
-      {editCond && <CondominiumModal open={!!editCond} onClose={() => setEditCond(null)} initial={editCond} />}
- 
-      <AlertDialog open={!!deleteCond} onOpenChange={() => setDeleteCond(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir Condomínio</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir <strong>{deleteCond?.name}</strong>? Todos os apartamentos e dados vinculados serão excluídos permanentemente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async () => { await deleteCondo.mutateAsync(deleteCond!.id); setDeleteCond(null); }}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
  
       <DetailModal open={pendingModal} onClose={() => setPendingModal(false)} title={`A Receber — ${filterLabel} ${selectedYear}`} records={[...pendingRecords, ...pendingInstallmentRows]} tenants={[...allTenants, ...previousTenants.map(pt => ({ id: pt.original_id ?? '', first_name: pt.first_name, last_name: pt.last_name }))]} apartments={apartments} condominiums={condominiums} variant="pending" />
       <DetailModal open={overdueModal} onClose={() => setOverdueModal(false)} title={`Inadimplentes — ${filterLabel} ${selectedYear}`} records={overdueRecords} tenants={allTenants} apartments={apartments} condominiums={condominiums} variant="overdue" />

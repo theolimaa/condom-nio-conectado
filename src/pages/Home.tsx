@@ -48,7 +48,7 @@ export default function Home() {
       label: 'Condomínios',
       sub: `${condominiums.length} condomínio${condominiums.length !== 1 ? 's' : ''} · ${apartments.length} unidades`,
       icon: Building2,
-      path: '/dashboard',
+      path: '/condominios',
     },
     { label: 'Financeiro', sub: 'Registros e recebimentos', icon: Wallet, path: '/financeiro' },
     { label: 'Recibos', sub: 'Gerar e baixar em lote', icon: FileText, path: '/recibos' },

@@ -26,7 +26,7 @@ export default function Register() {
     if (error) {
       setError(error.message);
     } else {
-      navigate('/dashboard');
+      navigate('/');
     }
   }
 
