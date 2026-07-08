@@ -139,11 +139,11 @@ function ApartmentCard({
     // Contratos encerrados nao contam como inadimplentes
     if (contract?.status === 'ended') return false;
     // Filtrar pela data de VENCIMENTO (nao por r.month), igual ao Financial e Dashboard
-    const { dueDateStr } = getPeriodAndDueDate(r.month, contract?.start_date ?? null, contract?.payment_day ?? 1);
+    const { dueDateStr } = getPeriodAndDueDate(r.month, contract?.start_date ?? null, contract?.payment_day ?? 1, contract?.desired_payment_day, contract?.desired_payment_date);
     if (!dueDateStr || dueDateStr === '-') return false;
     const [y, m] = dueDateStr.split('-').map(Number);
     if (!(y === selectedYear && (selectedMonth === null || m - 1 === selectedMonth))) return false;
-    return getRecordStatus(r.month, contract?.payment_day, contract?.start_date) === 'overdue';
+    return getRecordStatus(r.month, contract?.payment_day, contract?.start_date, contract?.desired_payment_day, contract?.desired_payment_date) === 'overdue';
   });
  
   return (
